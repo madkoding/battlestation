@@ -1,31 +1,66 @@
 # BattleStation
 
-BattleStation es una plataforma de orquestacion de agentes de IA para desarrollo de software.
+BattleStation is an AI agent orchestration platform for software delivery.
 
-En terminos simples: te da un tablero Kanban + API + agentes autonomos para convertir tareas en trabajo ejecutado y revisado, con trazabilidad de extremo a extremo.
+In simple terms, it gives you a Kanban board + API + autonomous agents to turn tasks into implemented and reviewed work, with end-to-end traceability.
 
-## Que problema resuelve
+## What problem it solves
 
-- Coordinar tareas tecnicas sin perder contexto.
-- Automatizar el flujo `TODO -> PROGRESS -> QA -> DONE`.
-- Delegar implementacion y validacion a agentes especializados.
-- Mantener evidencia y estado en un solo lugar.
+- Coordinate technical tasks without losing context.
+- Automate the `TODO -> PROGRESS -> QA -> DONE` flow.
+- Delegate implementation and validation to specialized agents.
+- Keep evidence and task state in one place.
 
-## Como funciona
+## How it works
 
-BattleStation esta dividido en tres partes:
+BattleStation is split into three parts:
 
-- **Backend**: expone REST/WebSocket, guarda estado de proyectos/tareas y ejecuta el loop de orquestacion.
-- **Frontend**: dashboard para ver proyectos, tablero Kanban, actividad en vivo y detalle de tareas.
-- **Agentes**:
-  - `kosmos`: orquestador (elige tareas, asigna flujo).
-  - `vicks`: developer (implementa cambios).
-  - `wedge`: QA (valida y aprueba/rechaza).
+- **Backend**: exposes REST/WebSocket, stores project/task state, and runs the orchestration loop.
+- **Frontend**: dashboard to view projects, Kanban board, live activity, and task details.
+- **Agents**:
+  - `kosmos`: orchestrator (selects tasks, assigns flow).
+  - `vicks`: developer (implements changes).
+  - `wedge`: QA (validates and approves/rejects).
 
-## Resultado esperado
+## Expected outcome
 
-Cuando una tarea entra al sistema, BattleStation puede moverla por el flujo completo con intervencion humana minima, dejando comentarios, decisiones y evidencia del proceso.
+When a task enters the system, BattleStation can move it through the full flow with minimal human intervention, leaving comments, decisions, and evidence along the way.
 
-## Estado del proyecto
+## Project status
 
-Repositorio en evolucion activa. La meta es tener una base local-first y operable para equipos pequenos que quieran automatizar su delivery con agentes.
+This repository is under active development. The goal is to provide a practical local-first foundation for small teams that want to automate delivery with agents.
+
+## Quick start (`battlestation.sh`)
+
+Use the helper script from the repository root:
+
+```bash
+./battlestation.sh
+```
+
+By default it runs a doctor check and validates your local setup.
+
+### Common commands
+
+```bash
+./battlestation.sh doctor   # run diagnostics
+./battlestation.sh start    # start backend + frontend
+./battlestation.sh status   # show service status
+./battlestation.sh stop     # stop all services
+```
+
+### What `start` does
+
+- Stops previous Battlestation processes (if any).
+- Runs health checks (Node/npm, ports, profiles, provider health).
+- Starts Backend on `http://localhost:18792`.
+- Starts Frontend (usually `http://localhost:5173`, fallback ports supported by Vite).
+- Writes logs to `.logs/` and process ids to `.pids/`.
+
+### Requirements
+
+- Node.js + npm installed.
+- Project dependencies installed (`npm install --workspaces`).
+- If you want agents to run LLM tasks, configure a provider in Settings and keep it healthy.
+
+After startup, open the frontend URL shown by the script output.
