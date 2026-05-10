@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+*.tsbuildinfo
+
+# Runtime and local state
+.logs/
+.pids/
+.battlestation/
+.worktrees/
+
+# Tooling caches
+.vite/
+**/.vite/
+apps/frontend/node_modules/.tmp/
+
+# Test artifacts
+coverage/
+**/coverage/
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+
+# Environment and local overrides
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Misc caches
+.cache/
+**/.cache/
+.eslintcache

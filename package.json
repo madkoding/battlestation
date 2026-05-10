@@ -1,0 +1,21 @@
+{
+  "name": "kosmos",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/backend",
+    "dev:frontend": "npm run dev -w apps/frontend",
+    "dev:agent": "npm run dev -w apps/agent",
+    "build": "npm run build -w packages/shared && npm run build -w apps/backend && npm run build -w apps/agent",
+    "build:frontend": "npm run build -w apps/frontend",
+    "lint": "npm run lint -w apps/backend && npm run lint -w apps/agent && npm run lint -w apps/frontend",
+    "test": "npm run test -w packages/shared && npm run test -w apps/agent && npm run test -w apps/backend",
+    "typecheck": "npm run typecheck -w apps/backend && npm run typecheck -w apps/agent && npm run typecheck -w apps/frontend"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
