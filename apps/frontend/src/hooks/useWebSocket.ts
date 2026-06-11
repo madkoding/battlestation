@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { API_BASE_URL, WS_BASE_URL } from '@/lib/constants'
+import { WS_BASE_URL } from '@/lib/constants'
 import { useActivityStore } from '@/stores/activityStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -140,51 +140,15 @@ export function useWebSocket() {
       ? WS_BASE_URL
       : `${WS_BASE_URL}/ws`
 
-    const resolveHealthUrl = (): string | null => {
-      try {
-        const apiBase = String(API_BASE_URL || '').trim()
-        if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
-          return `${apiBase.replace(/\/$/, '')}/health`
-        }
-        if (typeof window !== 'undefined') {
-          return `${window.location.origin}/health`
-        }
-      } catch {
-        // fall through
-      }
-      return null
-    }
-
-    const healthUrl = resolveHealthUrl()
-
     const tryConnect = async () => {
-        if (healthUrl) {
-          try {
-            const health = await fetch(healthUrl)
-            if (!health.ok) {
-              throw new Error('Backend not ready')
-            }
-          } catch {
-            setWsLastError('Backend health check failed')
-            if (!reconnectEnabledRef.current) return
-          reconnectAttemptsRef.current += 1
-          const retryAfterMs = Math.min(30000, 1000 * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
-          reconnectTimerRef.current = setTimeout(() => {
-            if (!reconnectEnabledRef.current) return
-            void tryConnect()
-          }, retryAfterMs)
-          return
-        }
-      }
-    
+      setConnectionState(reconnectAttemptsRef.current > 0 ? 'reconnecting' : 'connecting')
+
       try {
-        setConnectionState(reconnectAttemptsRef.current > 0 ? 'reconnecting' : 'connecting')
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws
       
         ws.onopen = () => {
           console.log('WebSocket connected')
-          const recovered = reconnectAttemptsRef.current > 0
           reconnectAttemptsRef.current = 0
           setIsConnected(true)
           setConnectionState('connected')
@@ -206,18 +170,14 @@ export function useWebSocket() {
               })
           }
 
-          if (recovered) {
-            addToast('success', 'Live updates connection restored')
-          } else {
-            addToast('info', 'Connected to live updates')
-          }
+          addToast('info', 'Connected to live updates')
         }
       
         ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data)
             handleMessage(message)
-          } catch (error) {
+          } catch (error: unknown) {
             console.error('Failed to parse WebSocket message:', error)
           }
         }
@@ -239,7 +199,6 @@ export function useWebSocket() {
           }
           setWsLastError('WebSocket disconnected')
 
-        // Attempt reconnect with exponential backoff + jitter
           reconnectTimerRef.current = setTimeout(() => {
             if (!reconnectEnabledRef.current) return
             if (wsRef.current?.readyState === WebSocket.CLOSED) {
@@ -262,6 +221,13 @@ export function useWebSocket() {
         if (!reconnectEnabledRef.current) return
         setIsConnected(false)
         setWsLastError('Failed to initialize WebSocket')
+
+        reconnectAttemptsRef.current += 1
+        const retryAfterMs = Math.min(30000, 1000 * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!reconnectEnabledRef.current) return
+          void tryConnect()
+        }, retryAfterMs)
       }
     }
 

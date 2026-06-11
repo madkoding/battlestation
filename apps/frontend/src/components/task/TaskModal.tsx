@@ -377,7 +377,7 @@ function TaskHeader({ task, project }: { task: Task; project: { name: string } }
           <PriorityBadge priority={task.priority} size="sm" />
         </motion.div>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="hidden xs:block">
-          <AgentBadge agent={task.assigned_to} size="sm" />
+          <AgentBadge agent={task.assigned_to || ''} size="sm" />
         </motion.div>
       </motion.div>
     </motion.div>
@@ -527,7 +527,7 @@ function TaskStatusActions({ task }: { task: Task }) {
         push: false,
       })
       addToast('success', 'QA approved by human. Battlestation will close the task in done.')
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Approval failed'
       addToast('error', message)
     } finally {
@@ -559,7 +559,7 @@ function TaskStatusActions({ task }: { task: Task }) {
       addToast('success', `Task moved to ${STATUS_META[toStatus].label}`)
       setShowQaChecklist(false)
       setShowQaRejection(false)
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Transition failed'
       addToast('error', message)
     } finally {
@@ -868,7 +868,7 @@ function CommentsSection({ taskId }: { taskId: string }) {
 
         return merged
       })
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load comments'
       setLoadError(message)
     } finally {

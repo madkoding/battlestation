@@ -1,144 +1,47 @@
-import type { TaskStatus, Priority } from '@/lib/constants'
+import type {
+  TaskStatus,
+  Priority,
+  Project,
+  AgentProfile,
+} from '@kosmos/shared'
 
-// Project
-export interface Project {
-  id: string
-  name: string
-  path: string
-  color?: string
-  description?: string | null
-  banner_image_url?: string | null
-  is_hidden: boolean
-  task_count: number
-  created_at: string
-  updated_at: string
-}
+export type {
+  TaskStatus,
+  Priority,
+  Project,
+  Task,
+  TaskContext,
+  TransitionTaskInput,
+  ApproveQaInput,
+  TaskComment,
+  CreateCommentInput,
+  CreateProjectInput,
+  CreateTaskInput,
+  UpdateTaskInput,
+  AgentProfile,
+} from '@kosmos/shared'
 
-export interface CreateProjectInput {
-  name: string
-  path: string
-  color?: string
-  description?: string
-  banner_image_url?: string
-}
-
-// Task
-export interface Task {
-  id: string
-  project_id: string
-  title: string
-  description?: string
-  status: TaskStatus
-  assigned_to: string
-  priority: Priority
-  task_kind: 'task' | 'subtask'
-  parent_task_id?: string | null
-  workspace_path?: string
-  work_branch?: string
-  base_branch?: string
-  release_approved: boolean
-  approved_by?: string | null
-  approved_branch?: string | null
-  approved_push: boolean
-  approved_at?: string | null
-  jira_ready: boolean
-  stage_notified_stage?: string | null
-  stage_notified_at?: string | null
-  release_ready_notified_at?: string | null
-  retry_count?: number
-  last_failure_reason?: string | null
-  escalation_count?: number
-  requeue_count?: number
-  last_escalated_at?: string | null
-  last_requeued_at?: string | null
-  created_at: string
-  updated_at: string
-  // Computed
-  subtask_count?: number
-  completed_subtasks?: number
-}
-
-export interface TaskContext {
-  task: Task
-  project: Project
-  comments: TaskComment[]
-  subtasks: Task[]
-  children_by_status: Record<string, number>
-}
-
-export interface CreateTaskInput {
-  project_id: string
-  title: string
-  description?: string
-  status?: TaskStatus
-  priority?: Priority
-  parent_task_id?: string
-}
-
-export interface UpdateTaskInput {
-  title?: string
-  description?: string
-  status?: TaskStatus
-  priority?: Priority
-  assigned_to?: string
-}
-
-export interface TransitionTaskInput {
-  to_status: TaskStatus
-  agent_name?: string
-  comment_text?: string
-  qa_checklist?: {
-    scope_complete?: boolean
-    self_review_done?: boolean
-    tests_passed?: boolean
-    diff_attached?: boolean
-  }
-  qa_rejection?: {
-    root_cause?: string
-    repro_steps?: string
-    impacted_files?: string
-    failed_checks?: string[]
-  }
-}
-
-export interface ApproveQaInput {
-  approved_by: string
-  branch: string
-  push: boolean
-}
-
-// Comments
-export interface TaskComment {
-  id: string
-  task_id: string
-  agent_id?: string
-  agent_name?: string
-  comment: string
-  created_at: string
-}
-
-export interface CreateCommentInput {
-  comment: string
-  agent_name?: string
-}
-
-// Activity
+// Activity (frontend uses camelCase)
+// Activity (both camelCase and snake_case from normalizeActivity)
 export interface Activity {
   id?: string
   type: string
   agent: string
   agentId?: string
   agentName?: string
+  agent_id?: string
+  agent_name?: string
   message: string
   currentTask?: string
-  task_id?: string
+  current_task?: string
   taskId?: string
-  task_title?: string
+  task_id?: string
   taskTitle?: string
-  project_id?: string
+  task_title?: string
   projectId?: string
-  project_name?: string
+  project_id?: string
   projectName?: string
+  project_name?: string
   status?: string
   mood?: string
   timestamp: string
@@ -155,12 +58,6 @@ export interface Agent {
   currentTask?: string
   projectId?: string
   lastActivity: string
-}
-
-export interface AgentProfile {
-  id: string
-  name: string
-  role: string
 }
 
 export interface AgentWorkflow {

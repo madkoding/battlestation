@@ -9,13 +9,18 @@
     "dev": "npm run dev -w apps/backend",
     "dev:frontend": "npm run dev -w apps/frontend",
     "dev:agent": "npm run dev -w apps/agent",
-    "build": "npm run build -w packages/shared && npm run build -w apps/backend && npm run build -w apps/agent",
-    "build:frontend": "npm run build -w apps/frontend",
-    "lint": "npm run lint -w apps/backend && npm run lint -w apps/agent && npm run lint -w apps/frontend",
+    "build": "npm run build -w packages/shared && npm run build -w apps/backend && npm run build -w apps/agent && npm run build -w apps/frontend",
+    "lint": "npm run lint -w packages/shared && npm run lint -w apps/backend && npm run lint -w apps/agent && npm run lint -w apps/frontend",
     "test": "npm run test -w packages/shared && npm run test -w apps/agent && npm run test -w apps/backend",
-    "typecheck": "npm run typecheck -w apps/backend && npm run typecheck -w apps/agent && npm run typecheck -w apps/frontend"
+    "typecheck": "npm run typecheck -w packages/shared && npm run typecheck -w apps/backend && npm run typecheck -w apps/agent && npm run typecheck -w apps/frontend"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "typescript-eslint": "^8.0.0"
   }
 }

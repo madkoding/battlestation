@@ -1,12 +1,10 @@
 import { existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { DEFAULT_RUNTIME_POLICY, loadRuntimePolicy } from '@kosmos/shared'
+import { DEFAULT_RUNTIME_POLICY, loadRuntimePolicy, POLICY_CACHE_TTL_MS } from '@kosmos/shared'
 import type { PolicyTarget, RuntimePolicy } from '@kosmos/shared'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-
-const CACHE_TTL_MS = 5000
 
 interface CacheEntry {
   policy: RuntimePolicy
@@ -50,7 +48,7 @@ export function getRuntimePolicy(target: PolicyTarget): RuntimePolicy {
       profilesRoot: resolveProfilesRoot(),
       target,
     })
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn(`[policy] Failed loading policy for ${target}: ${message}`)
     policy = fallbackPolicy(target)
@@ -58,7 +56,7 @@ export function getRuntimePolicy(target: PolicyTarget): RuntimePolicy {
 
   policyCache.set(target, {
     policy,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+    expiresAt: Date.now() + POLICY_CACHE_TTL_MS,
   })
 
   return policy

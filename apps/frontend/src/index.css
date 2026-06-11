@@ -29,6 +29,9 @@
   --color-accent-success: var(--accent-success);
   --color-accent-warning: var(--accent-warning);
   --color-accent-danger: var(--accent-danger);
+  --color-success: var(--accent-success);
+  --color-warning: var(--accent-warning);
+  --color-danger: var(--accent-danger);
 
   --color-status-todo: var(--status-todo);
   --color-status-progress: var(--status-progress);

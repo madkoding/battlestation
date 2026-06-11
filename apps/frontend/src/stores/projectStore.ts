@@ -79,7 +79,7 @@ export const useProjectStore = create<ProjectState>()(
         try {
           const projects = await projectsApi.getAll()
           set({ projects, isLoadingProjects: false })
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to load projects:', error)
           set({ isLoadingProjects: false })
         }
@@ -93,7 +93,7 @@ export const useProjectStore = create<ProjectState>()(
             projectTasks: { ...state.projectTasks, [projectId]: tasks },
             isLoadingTasks: false
           }))
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to load tasks:', error)
           set({ isLoadingTasks: false })
         }
@@ -107,7 +107,7 @@ export const useProjectStore = create<ProjectState>()(
             taskContexts: { ...state.taskContexts, [taskId]: context },
             isLoadingContext: false
           }))
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to load task context:', error)
           set({ isLoadingContext: false })
         }
@@ -160,7 +160,7 @@ export const useProjectStore = create<ProjectState>()(
               taskContexts: nextTaskContexts,
             }
           })
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to refresh task by id:', error)
         }
       },
@@ -183,7 +183,7 @@ export const useProjectStore = create<ProjectState>()(
           }))
           
           return task
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to create task:', error)
           return null
         }
@@ -203,7 +203,7 @@ export const useProjectStore = create<ProjectState>()(
             })
             return { projectTasks: newProjectTasks }
           })
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to update task:', error)
         }
       },
@@ -232,7 +232,7 @@ export const useProjectStore = create<ProjectState>()(
             qa_checklist: transitionData?.qa_checklist,
             qa_rejection: transitionData?.qa_rejection,
           })
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to move task:', error)
           // Revert optimistic update
           set((state) => {

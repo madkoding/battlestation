@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 18795,
     host: true,
     proxy: {
       '/api': {
@@ -30,6 +30,19 @@ export default defineConfig({
         target: 'ws://127.0.0.1:18793',
         ws: true,
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) return 'vendor-react'
+          if (id.includes('node_modules/framer-motion') || id.includes('node_modules/lucide-react') || id.includes('node_modules/@dnd-kit')) return 'vendor-ui'
+          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-gfm')) return 'vendor-markdown'
+          if (id.includes('node_modules/zustand') || id.includes('node_modules/@tanstack/react-query')) return 'vendor-state'
+          if (id.includes('node_modules/axios') || id.includes('node_modules/class-variance-authority') || id.includes('node_modules/clsx') || id.includes('node_modules/tailwind-merge')) return 'vendor-utils'
+        },
       },
     },
   },

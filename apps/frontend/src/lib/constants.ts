@@ -1,5 +1,7 @@
+import type { TaskStatus as TaskStatusType, Priority as PriorityType } from '@kosmos/shared'
+
 // Task Status
-export type TaskStatus = 'todo' | 'progress' | 'qa' | 'done'
+export type TaskStatus = TaskStatusType
 
 export const STATUSES: TaskStatus[] = ['todo', 'progress', 'qa', 'done']
 
@@ -51,7 +53,7 @@ export const TRANSITION_CONFIG: Record<string, { agent: string; comment: string 
 }
 
 // Priority
-export type Priority = 'low' | 'medium' | 'high'
+export type Priority = PriorityType
 
 export const PRIORITIES: Priority[] = ['low', 'medium', 'high']
 
@@ -129,12 +131,12 @@ export const ACTIVITY_META: Record<ActivityType, { icon: string; label: string; 
 
 // API/WS resolution
 const runtimeOrigin =
-  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:18794'
+  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:18792'
 
 const runtimeWsOrigin =
   typeof window !== 'undefined'
     ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-    : 'ws://localhost:18794'
+    : 'ws://localhost:18793'
 
 const isViteDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)
 

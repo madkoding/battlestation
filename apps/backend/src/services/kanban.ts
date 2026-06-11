@@ -1,4 +1,4 @@
-import { getDb, saveDb } from '../db/sqlite-client'
+import { getDb, saveDb, execParams } from '../db/sqlite-client'
 import { v4 as uuid } from 'uuid'
 import { compilePolicyRegex } from '@kosmos/shared'
 import { broadcast } from '../ws-server'
@@ -88,11 +88,6 @@ function rowToObject(columns: string[], row: unknown[]): TaskRecord {
   return obj
 }
 
-function escape(str: string | undefined | null): string {
-  if (!str) return ''
-  return String(str).replace(/'/g, "''")
-}
-
 function resolveCommentLimit(value?: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -177,14 +172,18 @@ export async function listProjects() {
   const db = await getDb()
   const result = db.exec("SELECT * FROM projects ORDER BY created_at DESC")
   if (!result.length || !result[0].values.length) return []
-  return result[0].values.map((row) => rowToObject(result[0].columns, row))
+  return result[0].values.map((row: unknown[]) => rowToObject(result[0].columns, row))
 }
 
 export async function getProject(id: string) {
   const db = await getDb()
-  const result = db.exec(`SELECT * FROM projects WHERE id = '${id}'`)
+  const result = execParams(db, `SELECT * FROM projects WHERE id = ?`, [id])
   if (!result.length || !result[0].values.length) return null
   return rowToObject(result[0].columns, result[0].values[0])
+}
+
+function broadcastProjects() {
+  broadcast({ type: 'project_status', payload: undefined })
 }
 
 export async function createProject(data: { name: string; path: string; color?: string; description?: string }) {
@@ -193,9 +192,10 @@ export async function createProject(data: { name: string; path: string; color?: 
   const timestamp = now()
 
   db.run(`INSERT INTO projects (id, name, path, color, description, is_hidden, created_at, updated_at)
-    VALUES ('${id}', '${escape(data.name)}', '${escape(data.path)}', '${escape(data.color)}', '${escape(data.description)}', 0, '${timestamp}', '${timestamp}')`)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?)`, [id, data.name, data.path, data.color ?? null, data.description ?? null, timestamp, timestamp])
 
   saveDb(db)
+  broadcastProjects()
   return getProject(id)
 }
 
@@ -206,49 +206,55 @@ export async function updateProject(id: string, data: { name?: string; path?: st
   const db = await getDb()
   const timestamp = now()
 
-  const nextName = escape(data.name ?? current.name)
-  const nextPath = escape(data.path ?? current.path)
-  const nextColor = escape(data.color ?? current.color)
-  const nextDescription = escape(data.description ?? current.description)
-
   db.run(`UPDATE projects
-    SET name = '${nextName}',
-        path = '${nextPath}',
-        color = '${nextColor}',
-        description = '${nextDescription}',
-        updated_at = '${timestamp}'
-    WHERE id = '${id}'`)
+    SET name = ?,
+        path = ?,
+        color = ?,
+        description = ?,
+        updated_at = ?
+    WHERE id = ?`, [data.name ?? String(current.name ?? ''), data.path ?? String(current.path ?? ''), data.color ?? String(current.color ?? ''), data.description ?? String(current.description ?? ''), timestamp, id])
 
   saveDb(db)
+  broadcastProjects()
   return getProject(id)
 }
 
 export async function deleteProject(id: string) {
   const db = await getDb()
-  db.run(`DELETE FROM tasks WHERE project_id = '${id}'`)
-  db.run(`DELETE FROM projects WHERE id = '${id}'`)
+  db.run('BEGIN')
+  try {
+    db.run(`DELETE FROM tasks WHERE project_id = ?`, [id])
+    db.run(`DELETE FROM projects WHERE id = ?`, [id])
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
+  }
   saveDb(db)
+  broadcastProjects()
 }
 
 export async function getTasks(projectId: string, status?: TaskStatus, includeSubtasks = true) {
   const db = await getDb()
-  let query = `SELECT * FROM tasks WHERE project_id = '${projectId}'`
+  const params: (string | number | null)[] = [projectId]
+  let query = `SELECT * FROM tasks WHERE project_id = ?`
   if (status) {
-    query += ` AND status = '${status}'`
+    query += ` AND status = ?`
+    params.push(status)
   }
   if (!includeSubtasks) {
     query += ` AND task_kind = 'task'`
   }
   query += ' ORDER BY created_at DESC'
 
-  const result = db.exec(query)
+  const result = execParams(db, query, params)
   if (!result.length || !result[0].values.length) return []
   return result[0].values.map((row) => rowToObject(result[0].columns, row))
 }
 
 export async function getTask(id: string) {
   const db = await getDb()
-  const result = db.exec(`SELECT * FROM tasks WHERE id = '${id}'`)
+  const result = execParams(db, `SELECT * FROM tasks WHERE id = ?`, [id])
   if (!result.length || !result[0].values.length) return null
   return rowToObject(result[0].columns, result[0].values[0])
 }
@@ -267,11 +273,43 @@ export async function createTask(data: {
   const workspacePath = project?.path || ''
 
   db.run(`INSERT INTO tasks (id, project_id, title, description, status, priority, task_kind, workspace_path, release_approved, approved_push, jira_ready, created_at, updated_at)
-    VALUES ('${id}', '${data.project_id}', '${escape(data.title)}', '${escape(data.description)}', 'todo', '${data.priority || 'medium'}', 'task', '${escape(workspacePath)}', 0, 0, 0, '${timestamp}', '${timestamp}')`)
+    VALUES (?, ?, ?, ?, 'todo', ?, 'task', ?, 0, 0, 0, ?, ?)`, [id, data.project_id, data.title, data.description || null, data.priority || 'medium', workspacePath, timestamp, timestamp])
 
   saveDb(db)
   broadcast({ type: 'task:created', payload: { task_id: id, project_id: data.project_id } })
   return getTask(id)
+}
+
+export async function updateTask(id: string, data: {
+  title?: string
+  description?: string
+  priority?: string
+  assigned_to?: string
+}) {
+  const db = await getDb()
+  const timestamp = now()
+  const sets: string[] = []
+  const params: (string | number | null)[] = []
+
+  if (data.title !== undefined) { sets.push('title = ?'); params.push(data.title) }
+  if (data.description !== undefined) { sets.push('description = ?'); params.push(data.description) }
+  if (data.priority !== undefined) { sets.push('priority = ?'); params.push(data.priority) }
+  if (data.assigned_to !== undefined) { sets.push('assigned_to = ?'); params.push(data.assigned_to) }
+
+  if (!sets.length) return getTask(id)
+
+  sets.push('updated_at = ?')
+  params.push(timestamp)
+  params.push(id)
+
+  db.run(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, params)
+  saveDb(db)
+
+  const task = await getTask(id)
+  if (task) {
+    broadcast({ type: 'task:updated', payload: { task_id: id, project_id: task.project_id } })
+  }
+  return task
 }
 
 export async function moveTask(id: string, toStatus: TaskStatus, agentName?: string, commentText?: string) {
@@ -289,44 +327,56 @@ export async function moveTask(id: string, toStatus: TaskStatus, agentName?: str
 
   const db = await getDb()
   const timestamp = now()
-  const resolvedAgent = toStatus === 'todo'
+  const agent = toStatus === 'todo'
     ? ''
     : (agentName || task.assigned_to || '')
-  const agent = escape(resolvedAgent)
   let createdComment = false
 
-  db.run(`UPDATE tasks SET status = '${toStatus}', updated_at = '${timestamp}', assigned_to = '${agent}' WHERE id = '${id}'`)
+  db.run('BEGIN')
+  try {
+    db.run(`UPDATE tasks SET status = ?, updated_at = ?, assigned_to = ? WHERE id = ?`, [toStatus, timestamp, agent, id])
 
-  if (commentText) {
-    db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
-      VALUES ('${uuid()}', '${id}', '${agent}', '${escape(commentText)}', '${timestamp}')`)
-    createdComment = true
-  }
+    if (commentText) {
+      db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
+        VALUES (?, ?, ?, ?, ?)`, [uuid(), id, agent, commentText, timestamp])
+      createdComment = true
+    }
 
-  if (toStatus === 'progress' && fromStatus === 'todo') {
-    const project = await getProject(task.project_id)
-    if (project?.path) {
-      try {
-        const gitResult = gitInit(project.path)
-        const branchName = `task/${id.slice(0, 8)}`
-        const worktreeResult = gitCreateWorktree(project.path, branchName, id)
+    if (toStatus === 'progress' && fromStatus === 'todo') {
+      const project = await getProject(task.project_id)
+      if (project?.path) {
+        try {
+          const gitResult = gitInit(project.path)
+          const branchName = `task/${id.slice(0, 8)}`
+          const worktreeResult = gitCreateWorktree(project.path, branchName, id)
 
-        db.run(`UPDATE tasks SET work_branch = 'task/${id.slice(0, 8)}', base_branch = '${gitResult.base_branch}' WHERE id = '${id}'`)
+          const workBranch = `task/${id.slice(0, 8)}`
+          db.run(`UPDATE tasks SET work_branch = ?, base_branch = ? WHERE id = ?`, [workBranch, gitResult.base_branch, id])
 
-        if (commentText) {
-          db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
-            VALUES ('${uuid()}', '${id}', 'system', 'Worktree created: ${worktreeResult.worktree_path}', '${timestamp}')`)
-          createdComment = true
+          if (commentText) {
+            const systemComment = `Worktree created: ${worktreeResult.worktree_path}`
+            db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
+              VALUES (?, ?, 'system', ?, ?)`, [uuid(), id, systemComment, timestamp])
+            createdComment = true
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error || 'Unknown error')
+          console.error('[kanban] Git worktree error:', message)
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error || 'Unknown error')
-        console.error('[kanban] Git worktree error:', message)
       }
     }
+
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
   }
 
   saveDb(db)
   broadcast({ type: 'task:updated', payload: { task_id: id, project_id: task.project_id } })
+  if (toStatus === 'qa' && fromStatus === 'progress') {
+    broadcast({ type: 'qa:ready_for_approval', payload: { task_id: id } })
+  }
   if (createdComment) {
     broadcast({ type: 'task:comment_created', payload: { task_id: id, project_id: task.project_id } })
   }
@@ -340,12 +390,18 @@ export async function rejectTask(id: string, reason: string, agentName?: string)
 
   const db = await getDb()
   const timestamp = now()
-  const agent = escape(agentName || 'wedge')
-  const assignee = 'vicks'
+  const agent = agentName || 'wedge'
 
-  db.run(`UPDATE tasks SET status = 'progress', assigned_to = '${assignee}', updated_at = '${timestamp}' WHERE id = '${id}'`)
-  db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
-    VALUES ('${uuid()}', '${id}', '${agent}', 'QA REJECTED: ${escape(reason)}', '${timestamp}')`)
+  db.run('BEGIN')
+  try {
+    db.run(`UPDATE tasks SET status = 'progress', assigned_to = 'vicks', updated_at = ? WHERE id = ?`, [timestamp, id])
+    db.run(`INSERT INTO task_comments (id, task_id, agent_name, comment, created_at)
+      VALUES (?, ?, ?, ?, ?)`, [uuid(), id, agent, `QA REJECTED: ${reason}`, timestamp])
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
+  }
 
   saveDb(db)
   broadcast({ type: 'task:updated', payload: { task_id: id, project_id: task.project_id } })
@@ -353,34 +409,52 @@ export async function rejectTask(id: string, reason: string, agentName?: string)
   return getTask(id)
 }
 
+export async function deleteTask(id: string) {
+  const task = await getTask(id)
+  if (!task) throw new Error('Task not found')
+
+  const db = await getDb()
+  db.run('BEGIN')
+  try {
+    db.run(`DELETE FROM task_comments WHERE task_id = ?`, [id])
+    db.run(`DELETE FROM qa_evidence WHERE task_id = ?`, [id])
+    db.run(`DELETE FROM tasks WHERE id = ?`, [id])
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
+  }
+  saveDb(db)
+  broadcast({ type: 'task:deleted', payload: { task_id: id, project_id: task.project_id } })
+}
+
 export async function getComments(taskId: string) {
   const db = await getDb()
-  const safeTaskId = escape(taskId)
-  const result = db.exec(
-    `SELECT * FROM task_comments WHERE task_id = '${safeTaskId}' ORDER BY created_at ASC, id ASC`
+  const result = execParams(db,
+    `SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC, id ASC`, [taskId]
   )
   if (!result.length || !result[0].values.length) return []
-  return result[0].values.map((row) => rowToObject(result[0].columns, row))
+  return result[0].values.map((row: unknown[]) => rowToObject(result[0].columns, row))
 }
 
 export async function getCommentsPaginated(taskId: string, options: GetCommentsPageOptions = {}): Promise<PaginatedCommentsResult> {
   const db = await getDb()
-  const safeTaskId = escape(taskId)
   const limit = resolveCommentLimit(options.limit)
   const offset = resolveCommentOffset(options.offset)
   const order = resolveCommentOrder(options.order)
 
-  const totalResult = db.exec(`SELECT COUNT(*) AS total FROM task_comments WHERE task_id = '${safeTaskId}'`)
+  const totalResult = execParams(db, `SELECT COUNT(*) AS total FROM task_comments WHERE task_id = ?`, [taskId])
   const total = totalResult.length && totalResult[0].values.length
     ? Number(totalResult[0].values[0][0] || 0)
     : 0
 
-  const rowsResult = db.exec(
-    `SELECT * FROM task_comments WHERE task_id = '${safeTaskId}' ORDER BY created_at ${order}, id ${order} LIMIT ${limit} OFFSET ${offset}`
+  const rowsResult = execParams(db,
+    `SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ${order}, id ${order} LIMIT ${limit} OFFSET ${offset}`,
+    [taskId]
   )
 
   const comments = rowsResult.length && rowsResult[0].values.length
-    ? rowsResult[0].values.map((row) => rowToObject(rowsResult[0].columns, row))
+    ? rowsResult[0].values.map((row: unknown[]) => rowToObject(rowsResult[0].columns, row))
     : []
 
   const nextOffset = offset + comments.length
@@ -406,15 +480,23 @@ export async function addComment(taskId: string, comment: string, agentName?: st
   const escalationMarker = String(getRuntimePolicy('vicks').delivery_gate.escalation_comment_marker || '## Delivery Escalation Required')
   const isEscalationComment = normalizedAgent === 'vicks' && commentText.includes(escalationMarker)
 
-  db.run(`INSERT INTO task_comments (id, task_id, agent_id, agent_name, comment, created_at)
-    VALUES ('${id}', '${taskId}', '${escape(agentId)}', '${escape(agentName)}', '${escape(comment)}', '${timestamp}')`)
+  db.run('BEGIN')
+  try {
+    db.run(`INSERT INTO task_comments (id, task_id, agent_id, agent_name, comment, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`, [id, taskId, agentId || null, agentName || null, comment, timestamp])
 
-  if (isEscalationComment) {
-    db.run(`UPDATE tasks
-      SET escalation_count = COALESCE(escalation_count, 0) + 1,
-          last_escalated_at = '${timestamp}',
-          updated_at = '${timestamp}'
-      WHERE id = '${taskId}'`)
+    if (isEscalationComment) {
+      db.run(`UPDATE tasks
+        SET escalation_count = COALESCE(escalation_count, 0) + 1,
+            last_escalated_at = ?,
+            updated_at = ?
+        WHERE id = ?`, [timestamp, timestamp, taskId])
+    }
+
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
   }
 
   saveDb(db)
@@ -423,7 +505,7 @@ export async function addComment(taskId: string, comment: string, agentName?: st
     broadcast({ type: 'task:comment_created', payload: { task_id: taskId, project_id: task.project_id } })
   }
 
-  const result = db.exec(`SELECT * FROM task_comments WHERE id = '${id}'`)
+  const result = execParams(db, `SELECT * FROM task_comments WHERE id = ?`, [id])
   if (!result.length || !result[0].values.length) return null
   return rowToObject(result[0].columns, result[0].values[0])
 }
@@ -431,11 +513,16 @@ export async function addComment(taskId: string, comment: string, agentName?: st
 export async function touchTaskActivity(taskId: string, agentName?: string, clearAssignment = false) {
   const db = await getDb()
   const timestamp = now()
-  const agent = escape(agentName || '')
-  const assignmentSql = clearAssignment
-    ? "''"
-    : `CASE WHEN '${agent}' = '' THEN assigned_to ELSE '${agent}' END`
-  db.run(`UPDATE tasks SET updated_at = '${timestamp}', assigned_to = ${assignmentSql} WHERE id = '${escape(taskId)}'`)
+  const agent = agentName || ''
+
+  if (clearAssignment) {
+    db.run(`UPDATE tasks SET updated_at = ?, assigned_to = '' WHERE id = ?`, [timestamp, taskId])
+  } else if (agent) {
+    db.run(`UPDATE tasks SET updated_at = ?, assigned_to = ? WHERE id = ?`, [timestamp, agent, taskId])
+  } else {
+    db.run(`UPDATE tasks SET updated_at = ? WHERE id = ?`, [timestamp, taskId])
+  }
+
   saveDb(db)
   const task = await getTask(taskId)
   if (task) {

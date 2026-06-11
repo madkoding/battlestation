@@ -155,6 +155,7 @@ export const mcpTools = {
   git_merge_worktree: {
     description: 'Merge a worktree branch back to base branch',
     inputSchema: {
+      path: { type: 'string' },
       branch_name: { type: 'string' },
       task_id: { type: 'string' },
     },
@@ -163,7 +164,7 @@ export const mcpTools = {
 
   git_delete_worktree: {
     description: 'Delete a worktree after merge',
-    inputSchema: { branch_name: { type: 'string' } },
+    inputSchema: { path: { type: 'string' }, branch_name: { type: 'string' } },
     outputSchema: z.object({ success: z.boolean() }),
   },
 

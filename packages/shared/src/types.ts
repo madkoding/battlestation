@@ -51,6 +51,15 @@ export const TaskSchema = z.object({
   approved_push: z.boolean().default(false),
   approved_at: z.string().optional(),
   jira_ready: z.boolean().default(false),
+  stage_notified_stage: z.string().optional(),
+  stage_notified_at: z.string().optional(),
+  release_ready_notified_at: z.string().optional(),
+  retry_count: z.number().optional(),
+  last_failure_reason: z.string().optional(),
+  escalation_count: z.number().optional(),
+  requeue_count: z.number().optional(),
+  last_escalated_at: z.string().optional(),
+  last_requeued_at: z.string().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   subtask_count: z.number().optional(),
@@ -167,6 +176,94 @@ export const ActivitySchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 })
 export type Activity = z.infer<typeof ActivitySchema>
+
+export const IdParamSchema = z.object({ id: z.string() })
+export const PidParamSchema = z.object({ pid: z.string() })
+export const EvidenceScreenshotParamsSchema = z.object({
+  id: z.string(),
+  evidenceId: z.string(),
+  index: z.string(),
+})
+
+export const UpdateProjectInputSchema = z.object({
+  name: z.string().optional(),
+  path: z.string().optional(),
+  color: z.string().optional(),
+  description: z.string().optional(),
+})
+
+export const ProjectTasksQuerySchema = z.object({
+  project_id: z.string().optional(),
+  status: TaskStatusSchema.optional(),
+  include_subtasks: z.union([z.literal('0'), z.literal('1')]).optional(),
+})
+
+export const TaskContextQuerySchema = z.object({
+  include_comments: z.union([z.literal('0'), z.literal('1')]).optional(),
+})
+
+export const CommentsQuerySchema = z.object({
+  limit: z.coerce.number().optional(),
+  offset: z.coerce.number().optional(),
+  order: z.enum(['asc', 'desc']).optional(),
+})
+
+export const SpawnAgentBodySchema = z.object({
+  profile_id: z.string(),
+})
+
+export const ApproveQaBodySchema = z.object({
+  approved_by: z.string().optional(),
+})
+
+export const AddCommentBodySchema = z.object({
+  comment: z.string(),
+  agent_name: z.string().optional(),
+})
+
+export const AgentsMdBodySchema = z.object({
+  content: z.string().optional(),
+})
+
+export const UpdateConfigBodySchema = z.object({
+  partial: z.record(z.unknown()),
+})
+
+export const LiveActivityQuerySchema = z.object({
+  project_id: z.string().optional(),
+  task_id: z.string().optional(),
+})
+
+export const TransitionTaskBodySchema = MoveTaskInputSchema.extend({
+  qa_checklist: z.object({
+    scope_complete: z.boolean().optional(),
+    self_review_done: z.boolean().optional(),
+    tests_passed: z.boolean().optional(),
+    diff_attached: z.boolean().optional(),
+  }).optional(),
+  qa_rejection: z.object({
+    root_cause: z.string().optional(),
+    repro_steps: z.string().optional(),
+    impacted_files: z.string().optional(),
+    failed_checks: z.array(z.string()).optional(),
+  }).optional(),
+})
+export type TransitionTaskInput = z.infer<typeof TransitionTaskBodySchema>
+
+export const ApproveQaInputSchema = z.object({
+  approved_by: z.string(),
+  branch: z.string(),
+  push: z.boolean(),
+})
+export type ApproveQaInput = z.infer<typeof ApproveQaInputSchema>
+
+export interface TaskContext {
+  task: Task
+  project: Project
+  comments: TaskComment[]
+  subtasks: Task[]
+  children_by_status: Record<string, number>
+}
 
 export const WSMessageSchema = z.union([
   z.object({ type: z.literal('task:updated'), payload: z.object({ task_id: z.string(), project_id: z.string() }) }),

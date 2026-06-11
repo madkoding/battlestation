@@ -1,9 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardView } from '@/components/dashboard/DashboardView'
-import { LiveActivityModal } from '@/components/dashboard/LiveActivityModal'
-import { TaskModal } from '@/components/task/TaskModal'
-import { KanbanModal } from '@/components/kanban/KanbanModal'
 import { LandingPage } from '@/components/landing/LandingPage'
 import { useProjectStore } from '@/stores/projectStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -11,6 +8,20 @@ import { useToastStore } from '@/stores/toastStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { healthApi } from '@/lib/api'
+
+const LiveActivityModal = lazy(() =>
+  import('@/components/dashboard/LiveActivityModal').then((m) => ({ default: m.LiveActivityModal })),
+)
+const TaskModal = lazy(() =>
+  import('@/components/task/TaskModal').then((m) => ({ default: m.TaskModal })),
+)
+const KanbanModal = lazy(() =>
+  import('@/components/kanban/KanbanModal').then((m) => ({ default: m.KanbanModal })),
+)
+
+function ModalFallback() {
+  return null
+}
 
 function AppDashboard() {
   const { loadProjects } = useProjectStore()
@@ -48,9 +59,11 @@ function AppDashboard() {
     <AppShell>
       <DashboardView />
 
-      <LiveActivityModal />
-      <TaskModal />
-      <KanbanModal />
+      <Suspense fallback={<ModalFallback />}>
+        <LiveActivityModal />
+        <TaskModal />
+        <KanbanModal />
+      </Suspense>
     </AppShell>
   )
 }

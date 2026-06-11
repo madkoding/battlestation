@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: Config = {
     providers: {
       ollama: {
         model: 'minimax-m2.7',
-        base_url: 'https://ollama.com/v1',
+        base_url: 'http://127.0.0.1:11434/v1',
         api_key: '',
         verify_tls: true,
         profile: 'cloud',

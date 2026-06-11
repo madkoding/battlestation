@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync } from 'fs'
-import { join, resolve, relative } from 'path'
+import { join, resolve, relative, sep } from 'path'
 import { spawn } from 'child_process'
 import { v4 as uuid } from 'uuid'
 import { getDb, saveDb } from '../db/sqlite-client'
 import { runPlaywrightScreenshots, type PlaywrightShot } from './playwright-runner'
+import { WORKSPACE_ALLOWED_ROOTS } from '@kosmos/shared'
 
 export interface FrontendReviewResult {
   executed: boolean
@@ -199,6 +200,12 @@ function sanitizeUrlList(baseUrl?: string, urls?: string[]): string[] {
 
 function ensurePathInsideWorkspace(workspacePath: string, candidatePath: string): string {
   const root = resolve(workspacePath)
+  const allowed = WORKSPACE_ALLOWED_ROOTS.some((allowedRoot) =>
+    root === allowedRoot || root.startsWith(allowedRoot + sep)
+  )
+  if (!allowed) {
+    throw new Error('workspace_path is not in an allowed directory')
+  }
   const candidate = resolve(root, candidatePath)
   const rel = relative(root, candidate)
   if (rel.startsWith('..')) {
@@ -220,13 +227,20 @@ async function persistQaEvidence(taskId: string, result: FrontendReviewResult & 
   const id = uuid()
   const createdAt = new Date().toISOString()
   const payload = JSON.stringify(result)
-  db.run('INSERT INTO qa_evidence (id, task_id, payload, created_at) VALUES (?, ?, ?, ?)', [
-    id,
-    taskId,
-    payload,
-    createdAt,
-  ])
-  db.run('DELETE FROM qa_evidence WHERE id NOT IN (SELECT id FROM qa_evidence WHERE task_id = ? ORDER BY created_at DESC LIMIT 10)', [taskId])
+  db.run('BEGIN')
+  try {
+    db.run('INSERT INTO qa_evidence (id, task_id, payload, created_at) VALUES (?, ?, ?, ?)', [
+      id,
+      taskId,
+      payload,
+      createdAt,
+    ])
+    db.run('DELETE FROM qa_evidence WHERE id NOT IN (SELECT id FROM qa_evidence WHERE task_id = ? ORDER BY created_at DESC LIMIT 10)', [taskId])
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
+  }
   saveDb(db)
 }
 

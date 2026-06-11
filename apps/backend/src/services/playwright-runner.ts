@@ -76,7 +76,7 @@ async function ensureBrowserLaunch(logs: string[]): Promise<Browser> {
 
   try {
     return await chromium.launch({ headless: true })
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     logs.push(`playwright launch failed: ${message}`)
     const missingExecutable = /Executable doesn't exist|browserType\.launch:.*download|install/i.test(message)
@@ -129,7 +129,7 @@ async function captureUrlScreenshots(params: {
     if (existsSync(desktopPath)) {
       shots.push({ path: desktopPath, url, viewport: 'desktop' })
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     logs.push(`desktop capture failed for ${url}: ${message}`)
   } finally {
@@ -160,7 +160,7 @@ async function captureUrlScreenshots(params: {
     if (existsSync(mobilePath)) {
       shots.push({ path: mobilePath, url, viewport: 'mobile' })
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     logs.push(`mobile capture failed for ${url}: ${message}`)
   } finally {

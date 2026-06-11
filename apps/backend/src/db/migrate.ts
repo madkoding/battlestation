@@ -1,8 +1,9 @@
-import { getDb, saveDb } from '../db/sqlite-client'
+import { getDb, saveDb, transaction } from '../db/sqlite-client'
 
 export async function runMigrations() {
   const db = await getDb()
 
+  transaction(db, () => {
   db.run(`CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -79,6 +80,12 @@ export async function runMigrations() {
     created_at TEXT NOT NULL
   )`)
 
+  db.run('CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_tasks_status_assigned ON tasks(status, assigned_to)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_qa_evidence_task_id ON qa_evidence(task_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_live_activity_events_created ON live_activity_events(created_at)')
+
   try {
     const cols = db.exec("PRAGMA table_info(running_agents)")
     const names = new Set<string>()
@@ -123,6 +130,7 @@ export async function runMigrations() {
     // ignore migration compatibility errors
   }
 
+  })
   saveDb(db)
   console.log('[db] Migrations complete')
 }

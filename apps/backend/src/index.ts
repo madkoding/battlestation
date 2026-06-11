@@ -4,14 +4,22 @@ import { registerRoutes } from './routes'
 import { registerMCPRoutes } from './routes/mcp'
 import { registerSettingsRoutes } from './routes/settings'
 import { runMigrations } from './db/migrate'
-import { initWebSocketServer } from './ws-server'
+import { initWebSocketServer, closeWebSocketServer } from './ws-server'
 import { getConfig } from './services/config'
-import { startKosmosLoop, stopKosmosLoop } from './services/kosmos-loop'
+import { spawnAgent, killAllAgents, startHeartbeatWatchdog } from './services/agent-spawner'
 
 const PORT = 18792
 
 async function main() {
   await runMigrations()
+
+  const { getDb, saveDb } = await import('./db/sqlite-client')
+  const db = await getDb()
+  db.run('DELETE FROM running_agents')
+  saveDb(db)
+  console.log('[server] Cleared stale agent records')
+
+  startHeartbeatWatchdog()
 
   const config = await getConfig()
   const actualPort = config.server?.port || PORT
@@ -29,13 +37,17 @@ async function main() {
 
   initWebSocketServer(actualWsPort)
 
-  startKosmosLoop()
+  spawnAgent('kosmos').then((result) => {
+    console.log(`[server] Kosmos agent spawned (PID: ${result.pid})`)
+  }).catch((err) => {
+    console.error('[server] Failed to spawn Kosmos agent:', err)
+  })
 
   const shutdown = async () => {
     console.log('[server] Shutting down...')
-    stopKosmosLoop()
+    await killAllAgents()
+    closeWebSocketServer()
     await fastify.close()
-    process.exit(0)
   }
 
   process.on('SIGINT', shutdown)
@@ -46,8 +58,8 @@ async function main() {
     console.log(`[server] REST API on http://localhost:${actualPort}`)
     console.log(`[server] MCP on http://localhost:${actualPort}/mcp`)
     console.log(`[server] WebSocket on ws://localhost:${actualWsPort}`)
-    console.log(`[server] Kosmos autonomous loop running`)
-  } catch (err) {
+    console.log(`[server] Kosmos agent spawned as child process`)
+  } catch (err: unknown) {
     fastify.log.error(err)
     process.exit(1)
   }

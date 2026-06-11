@@ -1,5 +1,6 @@
 import { existsSync } from 'fs'
 import { spawn } from 'child_process'
+import { DEFAULT_TIMEOUT_MS } from '@kosmos/shared'
 
 function trimOutput(value: string, maxChars = 8000): string {
   const text = String(value || '')
@@ -22,7 +23,7 @@ export async function runWorkspaceCommand(params: {
 }> {
   const workspacePath = String(params.workspacePath || '').trim()
   const command = String(params.command || '').trim()
-  const timeoutMs = Number(params.timeoutMs || 120000)
+  const timeoutMs = Number(params.timeoutMs || DEFAULT_TIMEOUT_MS)
 
   if (!workspacePath || !existsSync(workspacePath)) {
     return {

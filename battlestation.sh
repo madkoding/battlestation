@@ -104,7 +104,7 @@ doctor() {
     echo "=== Ports ==="
     check_port 18792 "Backend REST API" || ((issues++))
     check_port 18793 "WebSocket" || ((issues++))
-    check_port 5173 "Frontend (Vite)" || ((issues++))
+    check_port 18795 "Frontend (Vite)" || ((issues++))
     echo ""
 
     echo "=== External Services ==="
@@ -255,7 +255,7 @@ start_frontend() {
     local max_wait=20
     local waited=0
     while [ $waited -lt $max_wait ]; do
-        for port in 5173 5174 5175 18793 18794 18795; do
+        for port in 18795 18794 18793 5173 5174 5175; do
             if curl -sf http://localhost:$port >/dev/null 2>&1; then
                 echo $port > "$PID_DIR/frontend.port"
                 log "Frontend is ready at http://localhost:$port"
@@ -292,7 +292,7 @@ start() {
     log "  Backend:  http://localhost:18792"
     log "  API Doc:  http://localhost:18792/docs"
     log "  WebSocket: ws://localhost:18793"
-    local frontend_port=$(cat "$PID_DIR/frontend.port" 2>/dev/null || echo "5173")
+    local frontend_port=$(cat "$PID_DIR/frontend.port" 2>/dev/null || echo "18795")
     log "  Frontend: http://localhost:$frontend_port"
     log ""
     log "Logs: $LOG_DIR/"
@@ -317,7 +317,7 @@ status() {
     echo ""
     echo "Frontend:"
     local frontend_port=""
-    for port in 5173 5174 5175 18793 18794 18795; do
+    for port in 18795 18794 18793 5173 5174 5175; do
         if curl -sf http://localhost:$port >/dev/null 2>&1; then
             frontend_port=$port
             break

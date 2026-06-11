@@ -1,7 +1,20 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, resolve, sep } from 'path'
+import { homedir } from 'os'
 
 const AGENTS_FILE_NAME = 'AGENTS.md'
+const ALLOWED_PROJECT_ROOTS = [
+  resolve(join(homedir(), '.kosmos')),
+  resolve(process.cwd()),
+  resolve('/tmp'),
+]
+
+function isPathAllowed(projectPath: string): boolean {
+  const resolved = resolve(String(projectPath || '').trim())
+  return ALLOWED_PROJECT_ROOTS.some((root) =>
+    resolved === root || resolved.startsWith(root + sep)
+  )
+}
 const DEFAULT_PROMPT_MAX_CHARS = 12000
 
 export interface ProjectAgentsDocument {
@@ -46,6 +59,9 @@ function buildDefaultAgentsContent(params: {
 
 function resolveAgentsFilePath(projectPath: string): string {
   const root = resolve(String(projectPath || '').trim())
+  if (root && !isPathAllowed(root)) {
+    throw new Error('Project path is not in an allowed directory')
+  }
   return join(root, AGENTS_FILE_NAME)
 }
 
@@ -53,6 +69,9 @@ function ensureProjectDirectory(projectPath: string) {
   const root = resolve(String(projectPath || '').trim())
   if (!root || !existsSync(root)) {
     throw new Error('Project path does not exist')
+  }
+  if (!isPathAllowed(root)) {
+    throw new Error('Project path is not in an allowed directory')
   }
   const stats = statSync(root)
   if (!stats.isDirectory()) {

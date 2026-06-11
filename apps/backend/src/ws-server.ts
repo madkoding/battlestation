@@ -36,11 +36,22 @@ export function broadcast(message: object) {
   const data = JSON.stringify(message)
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(data)
+      try {
+        client.send(data)
+      } catch {
+        clients.delete(client)
+      }
     }
   })
 }
 
 export function getClientCount() {
   return clients.size
+}
+
+export function closeWebSocketServer() {
+  if (wss) {
+    wss.close()
+    wss = null
+  }
 }

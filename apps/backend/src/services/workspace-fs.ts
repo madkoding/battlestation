@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
 import { dirname, join, normalize, relative, resolve, sep } from 'path'
+import { WORKSPACE_ALLOWED_ROOTS } from '@kosmos/shared'
 
 type WorkspaceListEntry = { path: string; type: 'file' | 'directory'; size?: number }
 type WorkspaceSearchMatch = { path: string; line: number; text: string }
@@ -9,6 +10,14 @@ function ensureWorkspaceRoot(workspacePath: string): { ok: boolean; error?: stri
   if (!root) return { ok: false, error: 'workspace_path is required' }
   const resolved = resolve(root)
   if (!existsSync(resolved)) return { ok: false, error: 'workspace_path does not exist' }
+
+  const allowed = WORKSPACE_ALLOWED_ROOTS.some((allowedRoot) =>
+    resolved === allowedRoot || resolved.startsWith(allowedRoot + sep)
+  )
+  if (!allowed) {
+    return { ok: false, error: 'workspace_path is not in an allowed directory' }
+  }
+
   return { ok: true, root: resolved }
 }
 

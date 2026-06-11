@@ -1,19 +1,16 @@
-import { execSync } from 'child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { spawnSync } from 'child_process'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-interface ExecError {
-  stderr?: string
-  message?: string
-}
-
-function exec(cmd: string): string {
-  try {
-    return execSync(cmd, { encoding: 'utf-8' }).trim()
-  } catch (error) {
-    const execError = error as ExecError
-    throw new Error(`Git error: ${execError.stderr || execError.message || 'unknown error'}`)
-  }
+function git(args: string[], cwd?: string): string {
+  const result = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf-8',
+    timeout: 30000,
+  })
+  if (result.error) throw new Error(`Git error: ${result.error.message}`)
+  if (result.status !== 0) throw new Error(`Git error: ${result.stderr?.trim() || result.stdout?.trim() || 'unknown error'}`)
+  return result.stdout.trim()
 }
 
 function isGitRepo(path: string): boolean {
@@ -22,7 +19,7 @@ function isGitRepo(path: string): boolean {
 
 function branchExists(path: string, branchName: string): boolean {
   try {
-    exec(`git -C "${path}" rev-parse --verify --quiet "refs/heads/${branchName}"`)
+    git(['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}`], path)
     return true
   } catch {
     return false
@@ -31,7 +28,7 @@ function branchExists(path: string, branchName: string): boolean {
 
 function getCurrentBranch(path: string): string {
   try {
-    return exec(`git -C "${path}" branch --show-current`)
+    return git(['branch', '--show-current'], path)
   } catch {
     return 'main'
   }
@@ -46,21 +43,21 @@ export function gitInit(path: string): { success: boolean; base_branch: string }
     return { success: true, base_branch: getCurrentBranch(path) }
   }
 
-  exec(`git -C "${path}" init`)
+  git(['init'], path)
 
   const readmePath = join(path, 'README.md')
   if (!existsSync(readmePath)) {
     writeFileSync(readmePath, `# ${path.split('/').pop()}\n`)
-    exec(`git -C "${path}" add .`)
+    git(['add', '.'], path)
     try {
-      exec(`git -C "${path}" commit -m "Initial commit"`)
+      git(['commit', '-m', 'Initial commit'], path)
     } catch {
       // Empty repo
     }
   }
 
   try {
-    exec(`git -C "${path}" checkout -b main`)
+    git(['checkout', '-b', 'main'], path)
   } catch {
     // Branch might exist
   }
@@ -90,10 +87,9 @@ export function gitCreateWorktree(
   }
 
   try {
-    exec(`git -C "${path}" worktree add "${worktreePath}" -b "${branchName}"`)
-  } catch (error) {
-    const execError = error as ExecError
-    const message = String(execError.message || '')
+    git(['worktree', 'add', worktreePath, '-b', branchName], path)
+  } catch (error: unknown) {
+    const message = String(error instanceof Error ? error.message : '')
     if (
       message.includes('already exists') ||
       message.includes('worktree exists') ||
@@ -108,19 +104,47 @@ export function gitCreateWorktree(
 }
 
 export function gitMergeWorktree(
+  repoPath: string,
   branchName: string,
   taskId: string
 ): { success: boolean; commit_hash: string } {
-  void taskId
-  return {
-    success: true,
-    commit_hash: `mock-commit-${branchName}`,
+  try {
+    const currentBranch = getCurrentBranch(repoPath)
+    const baseBranch = currentBranch !== branchName ? currentBranch : 'main'
+
+    git(['checkout', baseBranch], repoPath)
+    git(['merge', '--squash', branchName], repoPath)
+    const message = `Merge task/${taskId.slice(0, 8)}: completed`
+    git(['commit', '-m', message], repoPath)
+    const commitHash = git(['rev-parse', 'HEAD'], repoPath)
+
+    return { success: true, commit_hash: commitHash }
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error.message : 'unknown error'
+    throw new Error(`Git merge error: ${err}`)
   }
 }
 
-export function gitDeleteWorktree(branchName: string): { success: boolean } {
-  void branchName
-  return { success: true }
+export function gitDeleteWorktree(path: string, branchName: string): { success: boolean } {
+  try {
+    const worktreePath = join(path, '.worktrees', branchName)
+    if (existsSync(worktreePath)) {
+      try {
+        git(['worktree', 'remove', worktreePath], path)
+      } catch {
+        rmSync(worktreePath, { recursive: true, force: true })
+        git(['worktree', 'prune'], path)
+      }
+    }
+    if (branchExists(path, branchName)) {
+      git(['branch', '-D', branchName], path)
+    }
+    return { success: true }
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error.message : 'unknown error'
+    console.error(`[git] Delete worktree error: ${err}`)
+    return { success: false }
+  }
 }
 
 export function gitListWorktreeArtifacts(params: {
@@ -146,7 +170,7 @@ export function gitListWorktreeArtifacts(params: {
   }
 
   try {
-    const statusRaw = exec(`git -C "${worktreePath}" status --porcelain`)
+    const statusRaw = git(['status', '--porcelain'], worktreePath)
     const changedFiles = statusRaw
       ? statusRaw
           .split('\n')
@@ -156,7 +180,7 @@ export function gitListWorktreeArtifacts(params: {
           .filter(Boolean)
       : []
 
-    const commitsRaw = exec(`git -C "${worktreePath}" log --oneline -n 5`)
+    const commitsRaw = git(['log', '--oneline', '-n', '5'], worktreePath)
     const recentCommits = commitsRaw
       ? commitsRaw
           .split('\n')
@@ -170,7 +194,7 @@ export function gitListWorktreeArtifacts(params: {
     const branch = String(workBranch || '').trim()
     if (repo && base && branch && existsSync(repo)) {
       try {
-        const diffRaw = exec(`git -C "${repo}" diff --name-only "${base}...${branch}"`)
+        const diffRaw = git(['diff', '--name-only', `${base}...${branch}`], repo)
         filesBetweenBranches = diffRaw
           ? diffRaw.split('\n').map((line) => line.trim()).filter(Boolean)
           : []

@@ -49,7 +49,7 @@ export const useAgentStore = create<AgentState>()(
             workflow: data?.workflow || DEFAULT_WORKFLOW,
             isLoading: false,
           })
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to load agent catalog:', error)
           set({ isLoading: false })
         }

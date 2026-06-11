@@ -12,7 +12,6 @@ import type {
   TaskComment,
   CreateCommentInput,
   Activity,
-  Agent,
   AgentsCatalogResponse,
 } from '@/types/models'
 
@@ -305,25 +304,26 @@ export const activityApi = {
 export const agentsApi = {
   getAll: async (): Promise<AgentsCatalogResponse> => {
     const response = await api.get('/api/agents')
-    return response.data as AgentsCatalogResponse
+    const data = response.data as { profiles: Array<{ id: string; name: string; role: string }>; active: Array<{ pid: number; profile_id: string }> }
+    return {
+      agents: data.active?.map((a) => ({ id: String(a.pid), name: a.profile_id, type: 'agent' as const, status: 'working' as const, mood: 'focused' as const, lastActivity: '' })) || [],
+      profiles: data.profiles || [],
+      workflow: {
+        roles: { orchestrator: 'Kosmos', developer: 'Vicks', qa: 'Wedge' },
+        status_owners: { todo: 'Kosmos', progress: 'Vicks', qa: 'Wedge', done: 'Kosmos' },
+        transition_owners: { 'todo:progress': 'Kosmos', 'progress:qa': 'Vicks', 'qa:progress': 'Wedge', 'qa:done': 'Kosmos' },
+      },
+      total: data.active?.length || 0,
+    }
   },
 
-  getById: async (id: string): Promise<Agent> => {
-    const response = await api.get(`/api/agents/${id}`)
+  spawn: async (profileId: string): Promise<{ pid: number; profile_id: string }> => {
+    const response = await api.post('/api/agents/spawn', { profile_id: profileId })
     return response.data
   },
 
-  create: async (data: Omit<Agent, 'id'>): Promise<Agent> => {
-    const response = await api.post('/api/agents', data)
-    return response.data
-  },
-
-  heartbeat: async (id: string): Promise<void> => {
-    await api.post(`/api/agents/${id}/heartbeat`)
-  },
-
-  chat: async (id: string, message: string): Promise<{ response: string }> => {
-    const response = await api.post(`/api/agents/${id}/chat`, { message })
+  kill: async (pid: number): Promise<{ success: boolean }> => {
+    const response = await api.post(`/api/agents/kill/${pid}`)
     return response.data
   },
 }

@@ -1,5 +1,7 @@
 type JsonObject = Record<string, unknown>
 
+import { asRecord, DEFAULT_TIMEOUT_MS } from '@kosmos/shared'
+
 interface MCPRequest {
   jsonrpc: '2.0'
   id: string | number
@@ -13,12 +15,6 @@ interface MCPResponse {
   result?: unknown
   error?: { code: number; message: string }
 }
-
-function asRecord(value: unknown): JsonObject {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  return value as JsonObject
-}
-
 export class MCPClient {
   private requestId = 0
   private readonly serverUrl: string
@@ -28,6 +24,8 @@ export class MCPClient {
     this.serverUrl = String(options?.serverUrl || 'http://localhost:18792')
     this.agentName = String(options?.agentName || 'agent')
   }
+
+  private readonly requestTimeoutMs = 60000
 
   async callTool(tool: string, args: JsonObject = {}): Promise<unknown> {
     const id = ++this.requestId
@@ -41,31 +39,35 @@ export class MCPClient {
       params,
     }
 
-    const response = await fetch(`${this.serverUrl}/mcp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs)
 
-    if (!response.ok) {
-      throw new Error(`MCP request failed: ${response.statusText}`)
+    try {
+      const response = await fetch(`${this.serverUrl}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`MCP request failed: ${response.statusText}`)
+      }
+
+      const data: MCPResponse = await response.json()
+
+      if (data.error) {
+        throw new Error(`MCP error: ${data.error.message}`)
+      }
+
+      return data.result
+    } finally {
+      clearTimeout(timeoutId)
     }
-
-    const data: MCPResponse = await response.json()
-
-    if (data.error) {
-      throw new Error(`MCP error: ${data.error.message}`)
-    }
-
-    return data.result
   }
 
   async listProjects() {
     return this.callTool('list_projects')
-  }
-
-  async createProject(name: string, path: string, description?: string) {
-    return this.callTool('create_project', { name, path, description })
   }
 
   async getTasks(projectId: string, status?: string) {
@@ -74,10 +76,6 @@ export class MCPClient {
 
   async getTask(taskId: string) {
     return this.callTool('get_task', { id: taskId })
-  }
-
-  async createTask(projectId: string, title: string, description?: string, priority?: string) {
-    return this.callTool('create_task', { project_id: projectId, title, description, priority })
   }
 
   async moveTask(taskId: string, toStatus: string, agentName?: string, commentText?: string) {
@@ -96,8 +94,8 @@ export class MCPClient {
     return this.callTool('add_comment', { task_id: taskId, comment, agent_name: agentName })
   }
 
-  async listAgents() {
-    return this.callTool('list_agents')
+  async getActiveAgents() {
+    return this.callTool('get_active_agents')
   }
 
   async spawnAgent(profileId: string) {
@@ -114,10 +112,6 @@ export class MCPClient {
 
   async gitCreateWorktree(path: string, branchName: string, taskId: string) {
     return this.callTool('git_create_worktree', { path, branch_name: branchName, task_id: taskId })
-  }
-
-  async gitMergeWorktree(branchName: string, taskId: string) {
-    return this.callTool('git_merge_worktree', { branch_name: branchName, task_id: taskId })
   }
 
   async gitListWorktreeArtifacts(params: {
@@ -145,26 +139,6 @@ export class MCPClient {
     })
   }
 
-  async runPlaywright(params: {
-    workspacePath: string
-    taskId?: string
-    baseUrl?: string
-    urls?: string[]
-    script?: string
-    outputSubdir?: string
-    maxUrls?: number
-  }) {
-    return this.callTool('run_playwright', {
-      workspace_path: params.workspacePath,
-      task_id: params.taskId,
-      base_url: params.baseUrl,
-      urls: params.urls,
-      script: params.script,
-      output_subdir: params.outputSubdir,
-      max_urls: params.maxUrls,
-    })
-  }
-
   async getQaEvidence(taskId: string) {
     return this.callTool('get_qa_evidence', {
       task_id: taskId,
@@ -184,7 +158,7 @@ export class MCPClient {
     })
   }
 
-  async workspaceExec(workspacePath: string, command: string, timeoutMs = 120000) {
+  async workspaceExec(workspacePath: string, command: string, timeoutMs = DEFAULT_TIMEOUT_MS) {
     return this.callTool('workspace_exec', {
       workspace_path: workspacePath,
       command,

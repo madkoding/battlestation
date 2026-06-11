@@ -86,14 +86,7 @@ async function loadProviderHealthFromDb(): Promise<Partial<Record<ProviderId, Pr
 async function saveProviderHealthToDb(health: Partial<Record<ProviderId, ProviderHealthState>>): Promise<void> {
   const db = await getDb()
   const payload = JSON.stringify(health)
-  const existing = db.exec("SELECT key FROM config_store WHERE key = 'provider_health'")
-
-  if (existing.length && existing[0].values.length) {
-    db.run('UPDATE config_store SET value = ? WHERE key = ?;', [payload, 'provider_health'])
-  } else {
-    db.run('INSERT INTO config_store (key, value) VALUES (?, ?);', ['provider_health', payload])
-  }
-
+  db.run('INSERT OR REPLACE INTO config_store (key, value) VALUES (?, ?)', ['provider_health', payload])
   saveDb(db)
 }
 
@@ -341,7 +334,7 @@ async function testProviderConnection(settings: ProviderSettings, apiKey: string
       message: 'Provider not supported yet',
       stages: { models_ok: false, chat_ok: false },
     }
-  } catch (err) {
+  } catch (err: unknown) {
     return {
       ok: false,
       message: `Connection failed: ${String(err)}`,
@@ -443,7 +436,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         models,
         selected: settings.model,
       }
-    } catch (err) {
+    } catch (err: unknown) {
       return {
         provider,
         models: [],

@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { getDb } from '../db/sqlite-client'
+import { getDb, execParams } from '../db/sqlite-client'
 
 export interface QaEvidenceScreenshot {
   path: string
@@ -22,10 +22,6 @@ export interface QaEvidenceEntry {
     screenshots: QaEvidenceScreenshot[]
     logs: string[]
   }
-}
-
-function escape(value: string): string {
-  return String(value || '').replace(/'/g, "''")
 }
 
 function safeParsePayload(raw: string): QaEvidenceEntry['payload'] {
@@ -54,10 +50,10 @@ function safeParsePayload(raw: string): QaEvidenceEntry['payload'] {
 
 export async function listQaEvidence(taskId: string): Promise<QaEvidenceEntry[]> {
   const db = await getDb()
-  const result = db.exec(`SELECT id, task_id, payload, created_at FROM qa_evidence WHERE task_id = '${escape(taskId)}' ORDER BY created_at DESC LIMIT 10`)
+  const result = execParams(db, `SELECT id, task_id, payload, created_at FROM qa_evidence WHERE task_id = ? ORDER BY created_at DESC LIMIT 10`, [taskId])
   if (!result.length || !result[0].values.length) return []
 
-  return result[0].values.map((row) => ({
+  return result[0].values.map((row: unknown[]) => ({
     id: String(row[0] || ''),
     task_id: String(row[1] || ''),
     payload: safeParsePayload(String(row[2] || '{}')),
@@ -67,7 +63,7 @@ export async function listQaEvidence(taskId: string): Promise<QaEvidenceEntry[]>
 
 export async function resolveQaEvidenceScreenshot(evidenceId: string, screenshotIndex: number): Promise<{ path: string } | null> {
   const db = await getDb()
-  const result = db.exec(`SELECT payload FROM qa_evidence WHERE id = '${escape(evidenceId)}' LIMIT 1`)
+  const result = execParams(db, `SELECT payload FROM qa_evidence WHERE id = ? LIMIT 1`, [evidenceId])
   if (!result.length || !result[0].values.length) return null
 
   const payload = safeParsePayload(String(result[0].values[0][0] || '{}'))

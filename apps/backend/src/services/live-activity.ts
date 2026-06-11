@@ -3,10 +3,6 @@ import { getDb, saveDb } from '../db/sqlite-client'
 
 const MAX_ACTIVITY_EVENTS = 20
 
-function escape(value: string): string {
-  return String(value || '').replace(/'/g, "''")
-}
-
 export async function saveLiveActivityEvent(payload: Record<string, unknown>) {
   if (String(payload.type || '').toLowerCase() === 'heartbeat') {
     return
@@ -15,12 +11,19 @@ export async function saveLiveActivityEvent(payload: Record<string, unknown>) {
   const db = await getDb()
   const id = uuid()
   const createdAt = new Date().toISOString()
-  const payloadText = escape(JSON.stringify(payload))
+  const payloadText = JSON.stringify(payload)
 
-  db.run(`INSERT INTO live_activity_events (id, payload, created_at) VALUES ('${id}', '${payloadText}', '${createdAt}')`)
-  db.run(`DELETE FROM live_activity_events WHERE id NOT IN (
-    SELECT id FROM live_activity_events ORDER BY created_at DESC LIMIT ${MAX_ACTIVITY_EVENTS}
-  )`)
+  db.run('BEGIN')
+  try {
+    db.run(`INSERT INTO live_activity_events (id, payload, created_at) VALUES (?, ?, ?)`, [id, payloadText, createdAt])
+    db.run(`DELETE FROM live_activity_events WHERE id IN (
+      SELECT id FROM live_activity_events ORDER BY created_at DESC LIMIT -1 OFFSET ${MAX_ACTIVITY_EVENTS}
+    )`)
+    db.run('COMMIT')
+  } catch (err: unknown) {
+    db.run('ROLLBACK')
+    throw err
+  }
   saveDb(db)
 }
 

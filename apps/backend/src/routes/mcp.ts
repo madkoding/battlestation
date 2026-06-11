@@ -1,3 +1,4 @@
+import { asRecord, DEFAULT_TIMEOUT_MS } from '@kosmos/shared'
 import type { FastifyInstance } from 'fastify'
 import { listProjects, createProject, getProject, deleteProject } from '../services/kanban'
 import { getTasks, createTask, getTask, moveTask, rejectTask, getComments, addComment, touchTaskActivity } from '../services/kanban'
@@ -24,14 +25,8 @@ const NOISY_METHODS = new Set([
   'workspace_search',
 ])
 
-type ToolArgs = Record<string, unknown>
 type TaskPriority = 'low' | 'medium' | 'high'
 type ConfigShape = Awaited<ReturnType<typeof getConfig>>
-
-function asRecord(value: unknown): ToolArgs {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  return value as ToolArgs
-}
 
 function asString(value: unknown): string {
   return String(value || '')
@@ -84,7 +79,7 @@ function asStringArray(value: unknown): string[] | undefined {
     .filter(Boolean)
 }
 
-function formatActionMessage(method: string, params: ToolArgs): string {
+function formatActionMessage(method: string, params: Record<string, unknown>): string {
   const taskId = String(params.id || params.task_id || '').trim()
   const projectId = String(params.project_id || '').trim()
 
@@ -144,11 +139,11 @@ interface MCPRequest {
   jsonrpc: '2.0'
   id: string | number
   method: string
-  params?: ToolArgs
+  params?: Record<string, unknown>
 }
 
 interface MCPToolHandler {
-  (args: ToolArgs): Promise<unknown>
+  (args: Record<string, unknown>): Promise<unknown>
 }
 
 const tools: Record<string, MCPToolHandler> = {
@@ -226,7 +221,7 @@ const tools: Record<string, MCPToolHandler> = {
   heartbeat_agent: async (args) =>
     heartbeatAgent(asNumber(args.pid, 0), asOptionalString(args.message)),
 
-  get_active_agents: async () => getActiveAgents(),
+  get_active_agents: async () => await getActiveAgents(),
 
   get_config: async () => getConfig(),
 
@@ -243,10 +238,10 @@ const tools: Record<string, MCPToolHandler> = {
     ),
 
   git_merge_worktree: async (args) =>
-    gitMergeWorktree(asString(args.branch_name), asString(args.task_id)),
+    gitMergeWorktree(asString(args.path), asString(args.branch_name), asString(args.task_id)),
 
   git_delete_worktree: async (args) =>
-    gitDeleteWorktree(asString(args.branch_name)),
+    gitDeleteWorktree(asString(args.path), asString(args.branch_name)),
 
   git_list_worktree_artifacts: async (args) =>
     gitListWorktreeArtifacts({
@@ -292,7 +287,7 @@ const tools: Record<string, MCPToolHandler> = {
     runWorkspaceCommand({
       workspacePath: asString(args.workspace_path),
       command: asString(args.command),
-      timeoutMs: asNumber(args.timeout_ms, 120000),
+      timeoutMs: asNumber(args.timeout_ms, DEFAULT_TIMEOUT_MS),
     }),
 
   workspace_list: async (args) =>
@@ -408,7 +403,7 @@ export async function registerMCPRoutes(fastify: FastifyInstance) {
         id,
         result,
       }
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error
         ? error.message
         : String(error || 'Internal error')
