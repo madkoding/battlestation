@@ -18,6 +18,9 @@ interface ProjectState {
   isLoadingTasks: boolean
   isLoadingContext: boolean
   
+  // Error states
+  projectsLoadError: string | null
+  
   // Actions
   setProjects: (projects: Project[]) => void
   setSelectedProject: (id: string | null) => void
@@ -68,6 +71,7 @@ export const useProjectStore = create<ProjectState>()(
       isLoadingProjects: false,
       isLoadingTasks: false,
       isLoadingContext: false,
+      projectsLoadError: null,
       
       // Actions
       setProjects: (projects) => set({ projects }),
@@ -75,13 +79,14 @@ export const useProjectStore = create<ProjectState>()(
       setSelectedProject: (id) => set({ selectedProjectId: id }),
       
       loadProjects: async () => {
-        set({ isLoadingProjects: true })
+        set({ isLoadingProjects: true, projectsLoadError: null })
         try {
           const projects = await projectsApi.getAll()
           set({ projects, isLoadingProjects: false })
         } catch (error: unknown) {
-          console.error('Failed to load projects:', error)
-          set({ isLoadingProjects: false })
+          const message = error instanceof Error ? error.message : 'Failed to load projects'
+          console.error(message, error)
+          set({ isLoadingProjects: false, projectsLoadError: message })
         }
       },
       

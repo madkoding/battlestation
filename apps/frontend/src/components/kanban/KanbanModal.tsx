@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Layout, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { useProjectStore } from '@/stores/projectStore'
@@ -66,7 +66,8 @@ export function KanbanModal() {
     <Dialog open={isKanbanModalOpen} onOpenChange={(open) => {
       if (!open) handleClose()
     }}>
-      <DialogContent showClose={false} aria-describedby={undefined} className="max-w-[100vw] w-full max-h-[100dvh] h-[100dvh] overflow-hidden p-0 flex flex-col rounded-none sm:rounded-xl">
+      <DialogContent showClose={false} className="max-w-[100vw] w-full max-h-[100dvh] h-[100dvh] overflow-hidden p-0 flex flex-col rounded-none sm:rounded-xl">
+        <DialogDescription className="sr-only">Kanban board for project tasks</DialogDescription>
         <DialogHeader className="p-0 flex-shrink-0 border-b border-border-default overflow-hidden">
           <div className="relative h-20 sm:h-24 lg:h-28 px-3 sm:px-4">
             {projectBanner ? (

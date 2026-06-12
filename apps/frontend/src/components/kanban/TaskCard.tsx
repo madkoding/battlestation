@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useAgentStore } from '@/stores/agentStore'
 import type { Task } from '@/types/models'
 import { cn } from '@/lib/utils'
+import { MS_PER_MINUTE } from '@/lib/constants'
 
 interface TaskCardProps {
   task: Task
@@ -21,7 +22,7 @@ function getStageAgeMeta(task: Task): { label: string; alert: boolean } | null {
     return null
   }
 
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - ts) / 60000))
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - ts) / MS_PER_MINUTE))
   if (elapsedMinutes < 60) {
     return { label: `${elapsedMinutes}m`, alert: elapsedMinutes >= 30 }
   }
@@ -63,6 +64,14 @@ function TaskCard({ task, isOverlay = false }: TaskCardProps) {
     openTaskModal(task.id)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isDragging) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      openTaskModal(task.id)
+    }
+  }
+
   const assignee = task.assigned_to || 'Unassigned'
   const role = getAgentRole(assignee).toLowerCase()
   const roleIcon = role.includes('orchestrator') ? '◈' : role.includes('qa') ? '🔍' : role.includes('developer') || role.includes('engineer') ? '⚡' : '●'
@@ -77,6 +86,9 @@ function TaskCard({ task, isOverlay = false }: TaskCardProps) {
       animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
       whileHover={{ scale: isOverlay ? 1 : 1.02 }}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
       className={cn(
         "group cursor-pointer",
         isOverlay && "rotate-2 scale-105 z-50"

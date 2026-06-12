@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface MarkdownContentProps {
   content: string
@@ -194,11 +194,12 @@ export function MarkdownContent({ content, compact = false, size = 'sm' }: Markd
       <Dialog open={Boolean(inlineImage)} onOpenChange={(open) => {
         if (!open) setInlineImage(null)
       }}>
-        <DialogContent aria-describedby={undefined} className="w-[96vw] max-w-5xl p-2 sm:p-4 bg-bg-card border-border-default">
+        <DialogContent className="w-[96vw] max-w-5xl p-2 sm:p-4 bg-bg-card border-border-default">
           <DialogHeader>
             <DialogTitle className="text-sm sm:text-base text-text-primary">
               {inlineImage?.alt || 'Screenshot preview'}
             </DialogTitle>
+            <DialogDescription className="sr-only">Screenshot preview</DialogDescription>
           </DialogHeader>
           {inlineImage ? (
             <div className="max-h-[80vh] overflow-auto rounded-md bg-surface-default/40 p-1">

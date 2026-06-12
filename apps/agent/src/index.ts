@@ -5,9 +5,11 @@ import { asRecord, sleep } from '@kosmos/shared'
 import type { RuntimePolicy } from '@kosmos/shared'
 import { MCPClient } from './mcp-client'
 import { runKosmosLoop } from './kosmos-loop'
+import { logger as makeLogger } from './lib/logger'
 import { getRuntimePolicy } from './policy'
 import { formatQaDecisionForPrompt, resolveQaDecision } from './qa-decision'
 import type { QaDecision } from './qa-decision'
+import { completion } from 'litellm'
 import {
   asUnknownArray,
   asWorkspaceExecResult,
@@ -76,6 +78,7 @@ function parseRuntimeOptions(argv: string[]) {
 const runtimeOptions = parseRuntimeOptions(process.argv.slice(2))
 const PROFILE_ID = runtimeOptions.profileId
 const MCP_SERVER_URL = runtimeOptions.mcpServerUrl
+const log = makeLogger(PROFILE_ID)
 
 function loadProfile(profileId: string): Profile {
   const agentSrcDir = join(__dirname, '..')
@@ -153,70 +156,31 @@ async function enforceGlobalLlmConfig(mcp: MCPClient, profile: Profile): Promise
 }
 
 async function callLLM(prompt: string, profile: Profile): Promise<string> {
-  const defaultBaseUrl = profile.provider === 'ollama'
-    ? 'http://localhost:11434'
-    : 'https://api.openai.com/v1'
-  const baseUrl = profile.base_url || defaultBaseUrl
-  const resolvedApiKey = profile.api_key || ''
-  const isOllamaCloud = profile.provider === 'ollama' && /ollama\.com|\/v1$/i.test(baseUrl)
-
-  const endpoint = (profile.provider === 'ollama' && !isOllamaCloud)
-    ? `${baseUrl}/api/generate`
-    : `${baseUrl}/chat/completions`
-
-  const body = (profile.provider === 'ollama' && !isOllamaCloud)
-    ? {
-        model: profile.model,
-        prompt,
-        stream: false,
-        options: {
-          temperature: profile.temperature,
-          top_p: profile.top_p,
-          num_predict: 800,
-        },
-      }
-    : {
-        model: profile.model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: profile.temperature,
-        max_tokens: profile.max_tokens,
-      }
-
-  const doRequest = async (payload: Record<string, unknown>) => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 90000)
-    try {
-      return await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...((profile.provider !== 'ollama' || isOllamaCloud) ? { 'Authorization': `Bearer ${resolvedApiKey}` } : {}),
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timeout)
+  if (profile.api_key) {
+    const keyEnvVar = `${profile.provider.toUpperCase()}_API_KEY`
+    if (!process.env[keyEnvVar]) {
+      process.env[keyEnvVar] = profile.api_key
     }
   }
 
-  const response = await doRequest(body as Record<string, unknown>)
+  const modelName = `${profile.provider}/${profile.model}`
 
-  if (!response.ok) {
-    let details = response.statusText
-    try {
-      const errData = await response.json() as { error?: string; message?: string }
-      details = errData.error || errData.message || details
-    } catch {
-      // noop
-    }
-    throw new Error(`LLM error: ${response.status} ${details}`)
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = []
+  if (profile.systemPrompt) {
+    messages.push({ role: 'system', content: profile.systemPrompt })
   }
+  messages.push({ role: 'user', content: prompt })
 
-  const data = await response.json()
-  const text = (profile.provider === 'ollama' && !isOllamaCloud) ? data.response : data.choices?.[0]?.message?.content || ''
-  if (profile.provider === 'ollama' && !isOllamaCloud && !String(text || '').trim()) {
-    throw new Error(`LLM error: empty response from configured model '${profile.model}'`)
+  const response = await completion({
+    model: modelName,
+    messages,
+    temperature: profile.temperature,
+    max_tokens: profile.max_tokens,
+  })
+
+  const text = response.choices?.[0]?.message?.content
+  if (!text?.trim()) {
+    throw new Error(`LLM error: empty response from model '${modelName}'`)
   }
   return text
 }
@@ -507,37 +471,42 @@ async function loadProjectAgentsInstructions(mcp: MCPClient, projectId: string):
 }
 
 async function main() {
-  console.log(`[agent:${PROFILE_ID}] Starting...`)
-  console.log(`[agent:${PROFILE_ID}] MCP Server: ${MCP_SERVER_URL}`)
+  try {
+    log.info('Starting...')
+    log.detail('MCP Server', MCP_SERVER_URL)
 
-  process.on('SIGTERM', () => {
-    console.log(`[agent:${PROFILE_ID}] Received SIGTERM, shutting down...`)
-    process.exit(0)
-  })
+    process.on('SIGTERM', () => {
+      log.warn('Shutting down...')
+      process.exit(0)
+    })
 
-  const mcp = new MCPClient({ serverUrl: MCP_SERVER_URL, agentName: PROFILE_ID })
-  const profile = loadProfile(PROFILE_ID)
-  await enforceGlobalLlmConfig(mcp, profile)
-  console.log(`[agent:${PROFILE_ID}] Model: ${profile.model}`)
-  console.log(`[agent:${PROFILE_ID}] System prompt loaded (${profile.systemPrompt.length} chars)`)
+    const mcp = new MCPClient({ serverUrl: MCP_SERVER_URL, agentName: PROFILE_ID })
+    const profile = loadProfile(PROFILE_ID)
+    await enforceGlobalLlmConfig(mcp, profile)
+    if (profile.model) log.detail('Model', profile.model)
+    log.detail('System prompt', `${profile.systemPrompt.length} chars`)
 
-  console.log(`[agent:${PROFILE_ID}] Agent ready. Starting autonomous loop...`)
-  console.log(`[agent:${PROFILE_ID}] Profile ID: ${PROFILE_ID}`)
+    log.success('Ready. Starting autonomous loop...')
 
-  if (PROFILE_ID === 'kosmos') {
-    await runKosmosLoop(mcp)
-  } else if (PROFILE_ID === 'vicks') {
-    await runVicksLoop(mcp, profile)
-  } else if (PROFILE_ID === 'wedge') {
-    await runWedgeLoop(mcp, profile)
-  } else {
-    console.error(`[agent:${PROFILE_ID}] Unknown profile. Valid profiles: kosmos, vicks, wedge`)
+    if (PROFILE_ID === 'kosmos') {
+      await runKosmosLoop(mcp)
+    } else if (PROFILE_ID === 'vicks') {
+      await runVicksLoop(mcp, profile)
+    } else if (PROFILE_ID === 'wedge') {
+      await runWedgeLoop(mcp, profile)
+    } else {
+      log.error('Unknown profile. Valid profiles: kosmos, vicks, wedge')
+      process.exit(1)
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.error(msg)
     process.exit(1)
   }
 }
 
 async function runVicksLoop(mcp: MCPClient, profile: Profile) {
-  console.log(`[agent:${PROFILE_ID}] Vicks developer loop started`)
+  log.info('Developer loop started')
   const selfPid = process.pid
   const blockedStateByTask = new Map<string, { signature: string; attempts: number; escalated: boolean }>()
 
@@ -569,7 +538,7 @@ async function runVicksLoop(mcp: MCPClient, profile: Profile) {
       }
 
       const task = myTasks[0]
-      console.log(`[agent:${PROFILE_ID}] Working on task: ${task.title}`)
+      log.info(`Working on task: ${task.title}`)
       const taskId = String(task.id || '')
       await mcp.heartbeatAgent(selfPid, `working task ${taskId}`)
 
@@ -787,15 +756,15 @@ async function runVicksLoop(mcp: MCPClient, profile: Profile) {
       await mcp.addComment(taskId, vicksComment, 'vicks')
       await mcp.moveTask(taskId, 'qa', 'vicks', `Handoff to QA: ${extractHeadline(closureComment, 'Implementation ready for QA')}`)
 
-      console.log(`[agent:${PROFILE_ID}] Task moved to QA: ${task.id}`)
+      log.success(`Task moved to QA: ${task.id}`)
 
       await mcp.spawnAgent('wedge')
-      console.log(`[agent:${PROFILE_ID}] Spawned Wedge for QA`)
+      log.info('Spawned Wedge for QA')
 
       break
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error || 'Unknown error')
-      console.error(`[agent:${PROFILE_ID}] Error:`, message)
+      log.error(message)
       const policy = getRuntimePolicy('vicks')
       const loopSleep = getLoopSleepMs(policy)
       await sleep(loopSleep.error)
@@ -804,7 +773,7 @@ async function runVicksLoop(mcp: MCPClient, profile: Profile) {
 }
 
 async function runWedgeLoop(mcp: MCPClient, profile: Profile) {
-  console.log(`[agent:${PROFILE_ID}] Wedge QA loop started`)
+  log.info('QA loop started')
   const selfPid = process.pid
   let authErrorStreak = 0
   let authBlockedUntil = 0
@@ -843,7 +812,7 @@ async function runWedgeLoop(mcp: MCPClient, profile: Profile) {
       }
 
       const task = tasks[0]
-      console.log(`[agent:${PROFILE_ID}] Reviewing task: ${task.title}`)
+      log.info(`Reviewing task: ${task.title}`)
       const taskId = String(task.id || '')
       lastReviewedTaskId = taskId
       await mcp.heartbeatAgent(selfPid, `reviewing task ${taskId}`)
@@ -934,7 +903,7 @@ Rules:
 `
 
       const response = await callLLM(compactFreeText(prompt, inputBudget), profile)
-      console.log(`[agent:${PROFILE_ID}] LLM response: ${response.substring(0, 100)}...`)
+      log.detail('LLM response', `${response.substring(0, 100)}...`)
       const qaDecision: QaDecision = await resolveQaDecision({
         policyAgent: String(policy.agent || 'wedge'),
         inputBudget,
@@ -967,7 +936,7 @@ Rules:
 
         await mcp.addComment(taskId, wedgeComment, 'wedge')
         await mcp.moveTask(taskId, 'done', 'wedge', `QA approved: ${extractHeadline(closureComment, 'QA checks passed')}`)
-        console.log(`[agent:${PROFILE_ID}] Task approved and moved to done: ${task.id}`)
+        log.success(`Task approved and moved to done: ${task.id}`)
       } else {
         const closureComment = await buildClosureComment({
           profile,
@@ -989,16 +958,16 @@ Rules:
 
         await mcp.addComment(taskId, wedgeComment, 'wedge')
         await mcp.rejectTask(taskId, extractHeadline(closureComment, qaDecision.summary.slice(0, 180)))
-        console.log(`[agent:${PROFILE_ID}] Task rejected: ${task.id}`)
+        log.warn(`Task rejected: ${task.id}`)
 
         await mcp.spawnAgent('vicks')
-        console.log(`[agent:${PROFILE_ID}] Respawned Vicks after QA rejection`)
+        log.info('Respawned Vicks after QA rejection')
       }
 
       break
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error || 'Unknown error')
-      console.error(`[agent:${PROFILE_ID}] Error:`, message)
+      log.error(message)
       const policy = getRuntimePolicy('wedge')
       const loopSleep = getLoopSleepMs(policy)
       const isInfraError = isInfraLlmError(message)
@@ -1037,4 +1006,4 @@ function isInfraLlmError(message: string): boolean {
     .test(String(message || ''))
 }
 
-main().catch(console.error)
+main().catch(() => process.exit(1))

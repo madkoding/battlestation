@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { logger } from '../lib/logger'
 
 function git(args: string[], cwd?: string): string {
   const result = spawnSync('git', args, {
@@ -142,7 +143,7 @@ export function gitDeleteWorktree(path: string, branchName: string): { success: 
     return { success: true }
   } catch (error: unknown) {
     const err = error instanceof Error ? error.message : 'unknown error'
-    console.error(`[git] Delete worktree error: ${err}`)
+    logger.git(`Delete worktree error: ${err}`)
     return { success: false }
   }
 }

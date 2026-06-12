@@ -11,7 +11,8 @@
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@kosmos/shared": "*"
+    "@kosmos/shared": "*",
+    "litellm": "^0.12.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

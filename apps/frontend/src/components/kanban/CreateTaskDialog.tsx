@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -47,9 +47,10 @@ function CreateTaskDialog({
         }
       }}
     >
-      <DialogContent aria-describedby={undefined} className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base sm:text-lg">New Todo Task</DialogTitle>
+          <DialogDescription className="sr-only">Create a new task in the todo column</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-3" onSubmit={handleCreateTaskSubmit}>

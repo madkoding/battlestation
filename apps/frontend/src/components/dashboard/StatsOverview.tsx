@@ -1,19 +1,31 @@
-import { FolderOpen, CheckCircle2, RotateCw, AlertTriangle } from 'lucide-react'
+import { FolderOpen, CheckCircle2, RotateCw, AlertTriangle, AlertCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 interface StatsOverviewProps {
   projectCount: number
   metrics: Record<string, number> | null
   isLoading: boolean
+  error?: string | null
 }
 
 export function StatsOverview({
   projectCount,
   metrics,
   isLoading,
+  error,
 }: StatsOverviewProps) {
   const safeMetrics = metrics || {}
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center gap-2 p-4 rounded-lg border border-danger/40 bg-danger/10 text-sm text-danger">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        <span>{error}</span>
+      </div>
+    )
+  }
 
   const stats = [
     { label: 'Projects', value: projectCount, icon: FolderOpen, color: 'text-accent-primary' },
@@ -33,9 +45,13 @@ export function StatsOverview({
               <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-lg sm:text-xl tablet:text-2xl font-bold text-text-primary">
-                {isLoading ? '...' : stat.value}
-              </p>
+              {isLoading ? (
+                <Skeleton className="h-7 sm:h-8 w-16 mb-1" />
+              ) : (
+                <p className="text-lg sm:text-xl tablet:text-2xl font-bold text-text-primary">
+                  {stat.value}
+                </p>
+              )}
               <p className="text-[10px] sm:text-xs text-text-muted">{stat.label}</p>
             </div>
           </div>

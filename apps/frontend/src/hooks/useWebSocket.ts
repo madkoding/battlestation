@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { WS_BASE_URL } from '@/lib/constants'
+import { WS_BASE_URL, WS_BASE_BACKOFF_MS, WS_JITTER_RANGE_MS, WS_MAX_BACKOFF_MS, WS_MAX_RECONNECT_ATTEMPTS } from '@/lib/constants'
 import { useActivityStore } from '@/stores/activityStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useToastStore } from '@/stores/toastStore'
 import { useUIStore } from '@/stores/uiStore'
 import { activityApi } from '@/lib/api'
-import type { Activity } from '@/types/models'
+import type { Activity, WSMessage } from '@/types/models'
 
 function normalizeActivity(payload: Activity): Activity {
   const anyPayload = payload as unknown as Record<string, unknown>
@@ -36,12 +36,53 @@ function isHeartbeatActivity(activity: Activity): boolean {
   return String(activity.type || '').toLowerCase() === 'heartbeat'
 }
 
+// WS message payload types and type guards
+interface WsTaskPayload {
+  project_id?: string
+  projectId?: string
+  task_id?: string
+  taskId?: string
+  id?: string
+}
+
+interface WsCommentPayload {
+  task_id?: string
+  taskId?: string
+  id?: string
+}
+
+interface WsProjectPayload {
+  project_id: string
+  projectId?: string
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isActivityPayload(payload: unknown): payload is Activity {
+  return isObject(payload)
+}
+
+function isTaskPayload(payload: unknown): payload is WsTaskPayload {
+  return isObject(payload)
+}
+
+function isCommentPayload(payload: unknown): payload is WsCommentPayload {
+  return isObject(payload)
+}
+
+function isProjectPayload(payload: unknown): payload is WsProjectPayload {
+  return isObject(payload) && typeof (payload as Record<string, unknown>).project_id === 'string'
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectEnabledRef = useRef(true)
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadedHistoryRef = useRef(false)
+  const wasEverConnectedRef = useRef(false)
   const [isConnected, setIsConnected] = useState(false)
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting')
   const lastActivityToastRef = useRef<{ message: string; at: number } | null>(null)
@@ -56,10 +97,11 @@ export function useWebSocket() {
   const setWsLastError = useUIStore((state) => state.setWsLastError)
   const setWsLastConnectedAt = useUIStore((state) => state.setWsLastConnectedAt)
 
-  const handleMessage = useCallback((message: { type: string; payload: unknown }) => {
+  const handleMessage = useCallback((message: WSMessage) => {
     switch (message.type) {
       case 'activity': {
-        const activity = normalizeActivity(message.payload as Activity)
+        if (!isActivityPayload(message.payload)) break
+        const activity = normalizeActivity(message.payload)
         if (isHeartbeatActivity(activity)) {
           break
         }
@@ -77,32 +119,23 @@ export function useWebSocket() {
 
       case 'task:updated':
       case 'task:created': {
-        const payload = message.payload as {
-          project_id?: string
-          projectId?: string
-          task_id?: string
-          taskId?: string
-          task_id_alt?: string
-          id?: string
-        }
-        const taskId = String(payload.task_id ?? payload.taskId ?? payload.id ?? '')
+        if (!isTaskPayload(message.payload)) break
+        const { task_id, taskId, id } = message.payload
+        const taskIdStr = String(task_id ?? taskId ?? id ?? '')
 
-        if (taskId) {
-          void refreshTaskById(taskId, { includeContext: false })
+        if (taskIdStr) {
+          void refreshTaskById(taskIdStr, { includeContext: false })
         }
         break
       }
 
       case 'task:comment_created': {
-        const payload = message.payload as {
-          task_id?: string
-          taskId?: string
-          id?: string
-        }
-        const taskId = String(payload.task_id ?? payload.taskId ?? payload.id ?? '')
-        if (taskId) {
-          bumpTaskCommentsVersion(taskId)
-          void refreshTaskById(taskId, { includeContext: false })
+        if (!isCommentPayload(message.payload)) break
+        const { task_id, taskId, id } = message.payload
+        const taskIdStr = String(task_id ?? taskId ?? id ?? '')
+        if (taskIdStr) {
+          bumpTaskCommentsVersion(taskIdStr)
+          void refreshTaskById(taskIdStr, { includeContext: false })
         }
         break
       }
@@ -112,9 +145,9 @@ export function useWebSocket() {
         break
 
       case 'task:deleted': {
-        const payload = message.payload as { project_id: string }
-        if (payload.project_id) {
-          refreshProject(payload.project_id)
+        if (!isProjectPayload(message.payload)) break
+        if (message.payload.project_id) {
+          refreshProject(message.payload.project_id)
           addToast('info', 'Task deleted')
         }
         break
@@ -170,7 +203,10 @@ export function useWebSocket() {
               })
           }
 
-          addToast('info', 'Connected to live updates')
+          if (!wasEverConnectedRef.current) {
+            wasEverConnectedRef.current = true
+            addToast('info', 'Connected to live updates')
+          }
         }
       
         ws.onmessage = (event) => {
@@ -190,13 +226,10 @@ export function useWebSocket() {
           setWsConnectionState('reconnecting')
 
           reconnectAttemptsRef.current += 1
-          const backoffMs = Math.min(30000, 1000 * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
-          const jitterMs = Math.floor(Math.random() * 400)
+          const backoffMs = Math.min(WS_MAX_BACKOFF_MS, WS_BASE_BACKOFF_MS * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
+          const jitterMs = Math.floor(Math.random() * WS_JITTER_RANGE_MS)
           const retryAfterMs = backoffMs + jitterMs
 
-          if (reconnectAttemptsRef.current === 1) {
-            addToast('error', 'Live updates disconnected, retrying...')
-          }
           setWsLastError('WebSocket disconnected')
 
           reconnectTimerRef.current = setTimeout(() => {
@@ -206,7 +239,7 @@ export function useWebSocket() {
             }
           }, retryAfterMs)
 
-          if (reconnectAttemptsRef.current >= 8) {
+          if (reconnectAttemptsRef.current >= WS_MAX_RECONNECT_ATTEMPTS) {
             setConnectionState('offline')
             setWsConnectionState('offline')
           }
@@ -223,7 +256,7 @@ export function useWebSocket() {
         setWsLastError('Failed to initialize WebSocket')
 
         reconnectAttemptsRef.current += 1
-        const retryAfterMs = Math.min(30000, 1000 * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
+        const retryAfterMs = Math.min(WS_MAX_BACKOFF_MS, WS_BASE_BACKOFF_MS * Math.pow(2, Math.max(0, reconnectAttemptsRef.current - 1)))
         reconnectTimerRef.current = setTimeout(() => {
           if (!reconnectEnabledRef.current) return
           void tryConnect()

@@ -1,7 +1,12 @@
-import test from 'node:test'
+import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import { runMigrations } from '../db/migrate'
+import { setupTestDb, cleanupTestDb } from '../test-utils/db'
+
+let dbDir: string
+before(() => { dbDir = setupTestDb() })
+after(() => { cleanupTestDb(dbDir) })
 import { registerRoutes } from '../routes'
 import { registerMCPRoutes } from '../routes/mcp'
 import { getTask, deleteProject, deleteTask } from '../services/kanban'
@@ -443,7 +448,7 @@ test('MCP: git_list_worktree_artifacts reports changes', async () => {
     const artRes = await mcpcall(app, 'git_list_worktree_artifacts', {
       worktree_path: wtPath,
       repo_path: repoDir,
-      base_branch: 'master',
+      base_branch: 'main',
       work_branch: 'feature/artifact-test',
     })
     assert.ok(artRes.result)

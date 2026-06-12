@@ -129,6 +129,33 @@ export const ACTIVITY_META: Record<ActivityType, { icon: string; label: string; 
   blocked: { icon: '⛔', label: 'Blocked', color: 'accent-danger' },
 }
 
+// Timeouts & Intervals
+export const TOAST_DEDUP_MS = 2500
+export const TOAST_AUTO_REMOVE_MS = 4200
+export const METRICS_POLL_MS = 10000
+export const AGENT_PULSE_INTERVAL_MS = 10000
+export const AGENT_ACTIVE_WINDOW_MS = 90000
+export const WS_BASE_BACKOFF_MS = 1000
+export const WS_JITTER_RANGE_MS = 400
+export const WS_MAX_BACKOFF_MS = 30000
+export const WS_MAX_RECONNECT_ATTEMPTS = 8
+export const COPY_FEEDBACK_MS = 1200
+export const COMMENTS_SCROLL_THRESHOLD_PX = 120
+export const DRAG_ACTIVATION_DISTANCE_PX = 8
+
+export const MAX_TOASTS = 5
+
+// Pagination & Limits
+export const MAX_ACTIVITY_STORE_ITEMS = 20
+export const MAX_ACTIVITY_DISPLAY_ITEMS = 20
+export const MAX_ACTIVITY_RENDER_ITEMS = 100
+export const MAX_AGENT_PULSE_ROWS = 8
+export const MAX_COUNTS_BY_TYPE = 6
+export const SKELETON_PLACEHOLDER_COUNT = 8
+
+// Conversion
+export const MS_PER_MINUTE = 60000
+
 // API/WS resolution
 const runtimeOrigin =
   typeof window !== 'undefined' ? window.location.origin : 'http://localhost:18792'

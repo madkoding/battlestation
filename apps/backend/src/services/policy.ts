@@ -2,6 +2,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { DEFAULT_RUNTIME_POLICY, loadRuntimePolicy, POLICY_CACHE_TTL_MS } from '@kosmos/shared'
 import type { PolicyTarget, RuntimePolicy } from '@kosmos/shared'
+import { logger } from '../lib/logger'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -39,7 +40,7 @@ export function getRuntimePolicy(target: PolicyTarget): RuntimePolicy {
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    console.warn(`[policy] Failed loading policy for ${target}: ${message}`)
+    logger.warn(`Failed loading policy for ${target}: ${message}`)
     policy = fallbackPolicy(target)
   }
 

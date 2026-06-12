@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Server, Cloud, Eye, EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, isValidUrl } from '@/lib/utils'
 
 interface ProviderSettingsFormProps {
   providerSettings: ProviderSettings
@@ -46,6 +46,9 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
     updateModel,
     testProvider,
   } = props
+
+  const ollamaUrlError = providerSettings.base_url && !isValidUrl(providerSettings.base_url) ? 'Invalid URL format' : ''
+  const cloudUrlError = providerSettings.base_url && !isValidUrl(providerSettings.base_url) ? 'Invalid URL format' : ''
 
   return (
     <div className="space-y-4">
@@ -120,7 +123,7 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
             size="sm"
             className="mt-2"
             onClick={() => void testProvider(providerSettings.provider, true)}
-            disabled={isLoadingProvider || isSavingProvider || isTestingProvider}
+            disabled={isLoadingProvider || isSavingProvider || isTestingProvider || !providerSettings.provider}
           >
             {isTestingProvider ? 'Testing...' : 'Test connection'}
           </Button>
@@ -192,7 +195,7 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-secondary">Model</label>
+            <label htmlFor="ollama-model" className="text-sm font-medium text-text-secondary">Model</label>
             <Select
               value={providerSettings.model}
               onValueChange={(value) => {
@@ -202,7 +205,7 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
               }}
               disabled={isLoadingProvider || isSavingProvider || availableModels.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger id="ollama-model">
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
@@ -221,21 +224,25 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
 
           {providerSettings.profile === 'local' && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-text-secondary">Base URL</label>
+              <label htmlFor="ollama-base-url" className="text-sm font-medium text-text-secondary">Base URL</label>
               <Input
+                id="ollama-base-url"
                 value={providerSettings.base_url}
                 onChange={(e) => setProviderSettings((current) => ({ ...current, base_url: e.target.value }))}
                 onBlur={updateModel}
                 disabled={isLoadingProvider || isSavingProvider}
                 placeholder="http://localhost:11434"
+                className={cn(ollamaUrlError && 'border-danger')}
               />
+              {ollamaUrlError && <p className="text-xs text-danger">{ollamaUrlError}</p>}
             </div>
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-secondary">API key</label>
+            <label htmlFor="ollama-api-key" className="text-sm font-medium text-text-secondary">API key</label>
             <div className="relative">
                 <Input
+                id="ollama-api-key"
                 type={showApiKey ? 'text' : 'password'}
                 value={providerSettings.api_key || ''}
                 onChange={(e) => setProviderSettings((current) => ({ ...current, api_key: e.target.value }))}
@@ -278,7 +285,7 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
       ) : providerSettings.provider === 'openai' || providerSettings.provider === 'github_copilot' ? (
         <>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-secondary">Model</label>
+            <label htmlFor="provider-model" className="text-sm font-medium text-text-secondary">Model</label>
             <Select
               value={providerSettings.model}
               onValueChange={(value) => {
@@ -288,7 +295,7 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
               }}
               disabled={isLoadingProvider || isSavingProvider || availableModels.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger id="provider-model">
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
@@ -303,20 +310,24 @@ export function ProviderSettingsForm(props: ProviderSettingsFormProps) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-secondary">Base URL</label>
+            <label htmlFor="provider-base-url" className="text-sm font-medium text-text-secondary">Base URL</label>
             <Input
+              id="provider-base-url"
               value={providerSettings.base_url}
               onChange={(e) => setProviderSettings((current) => ({ ...current, base_url: e.target.value }))}
               onBlur={updateModel}
               disabled={isLoadingProvider || isSavingProvider}
               placeholder={providerSettings.provider === 'github_copilot' ? 'https://api.githubcopilot.com' : 'https://api.openai.com/v1'}
+              className={cn(cloudUrlError && 'border-danger')}
             />
+            {cloudUrlError && <p className="text-xs text-danger">{cloudUrlError}</p>}
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-secondary">API key</label>
+            <label htmlFor="provider-api-key" className="text-sm font-medium text-text-secondary">API key</label>
             <div className="relative">
               <Input
+                id="provider-api-key"
                 type={showApiKey ? 'text' : 'password'}
                 value={providerSettings.api_key || ''}
                 onChange={(e) => setProviderSettings((current) => ({ ...current, api_key: e.target.value }))}

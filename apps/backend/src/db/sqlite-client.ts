@@ -1,12 +1,17 @@
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
+import { logger } from '../lib/logger'
 
 let dbInstance: SqlJsDatabase | null = null
 let dbPromise: Promise<SqlJsDatabase> | null = null
 
-const DB_PATH = join(homedir(), '.kosmos', 'kosmos.db')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function getDbPath(): string {
+  return process.env.KOSMOS_DB_PATH || join(homedir(), '.kosmos', 'kosmos.db')
+}
 
 export async function getDb(): Promise<SqlJsDatabase> {
   if (dbInstance) return dbInstance
@@ -16,24 +21,26 @@ export async function getDb(): Promise<SqlJsDatabase> {
   dbPromise = (async () => {
     const SQL = await initSqlJs()
 
-    const dir = join(homedir(), '.kosmos')
+    const dbPath = getDbPath()
+    const dir = dirname(dbPath)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
 
     try {
-      if (existsSync(DB_PATH)) {
-        const buffer = readFileSync(DB_PATH)
+      if (existsSync(dbPath)) {
+        const buffer = readFileSync(dbPath)
         dbInstance = new SQL.Database(buffer)
       } else {
         dbInstance = new SQL.Database()
       }
     } catch (err: unknown) {
-      console.warn('[db] Failed to load DB, backing up corrupt file and creating new DB:', err)
+      logger.warn('Failed to load DB, backing up corrupt file and creating new DB')
+      if (err) console.error(err)
       try {
-        const backupPath = `${DB_PATH}.corrupt.${Date.now()}`
-        renameSync(DB_PATH, backupPath)
-        console.log(`[db] Corrupt DB backed up to ${backupPath}`)
+        const backupPath = `${dbPath}.corrupt.${Date.now()}`
+        renameSync(dbPath, backupPath)
+        logger.info(`Corrupt DB backed up to ${backupPath}`)
       } catch { /* backup best-effort */ }
       dbInstance = new SQL.Database()
     }
@@ -42,6 +49,19 @@ export async function getDb(): Promise<SqlJsDatabase> {
   })()
 
   return dbPromise
+}
+
+export function resetDb(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  if (dbInstance) {
+    flushDb(dbInstance)
+    dbInstance.close()
+    dbInstance = null
+  }
+  dbPromise = null
 }
 
 export function transaction<T>(db: SqlJsDatabase, fn: () => T): T {
@@ -57,7 +77,6 @@ export function transaction<T>(db: SqlJsDatabase, fn: () => T): T {
 }
 
 const SAVE_DEBOUNCE_MS = 200
-let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 export function saveDb(db: SqlJsDatabase) {
   if (saveTimer) clearTimeout(saveTimer)
@@ -65,7 +84,7 @@ export function saveDb(db: SqlJsDatabase) {
     saveTimer = null
     const data = db.export()
     const buffer = Buffer.from(data)
-    writeFileSync(DB_PATH, buffer)
+    writeFileSync(getDbPath(), buffer)
   }, SAVE_DEBOUNCE_MS)
 }
 
@@ -76,7 +95,7 @@ export function flushDb(db: SqlJsDatabase) {
   }
   const data = db.export()
   const buffer = Buffer.from(data)
-  writeFileSync(DB_PATH, buffer)
+  writeFileSync(getDbPath(), buffer)
 }
 
 export function closeDb(db: SqlJsDatabase) {

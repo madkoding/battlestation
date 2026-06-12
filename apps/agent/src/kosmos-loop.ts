@@ -1,6 +1,9 @@
 import type { MCPClient } from './mcp-client'
 import { getRuntimePolicy } from './policy'
 import { asRecord, sleep, DEFAULT_POLL_MS } from '@kosmos/shared'
+import { logger as makeLogger } from './lib/logger'
+
+const log = makeLogger('kosmos')
 
 
 function asTaskRecordArray(value: unknown): Record<string, unknown>[] {
@@ -78,7 +81,7 @@ export async function runKosmosLoop(mcp: MCPClient) {
   const policy = getRuntimePolicy('kosmos')
   const pollIntervalMs = Math.max(500, Number(policy.orchestration?.poll_interval_ms || DEFAULT_POLL_MS))
 
-  console.log(`[agent:kosmos] Kosmos orchestration loop started (poll: ${pollIntervalMs}ms)`)
+  log.info(`Orchestration loop started (poll: ${pollIntervalMs}ms)`)
 
   while (true) {
     if (state.cycleInFlight) {
@@ -91,7 +94,7 @@ export async function runKosmosLoop(mcp: MCPClient) {
       await mcp.heartbeatAgent(selfPid, 'kosmos loop heartbeat')
       await kosmosCycle(mcp, state)
     } catch (error: unknown) {
-      console.error(`[kosmos] Cycle error:`, error)
+      log.error(`Cycle error: ${error}`)
     } finally {
       state.cycleInFlight = false
     }
@@ -167,7 +170,7 @@ async function kosmosCycle(mcp: MCPClient, state: KosmosProfileState) {
       const lastNotifiedAt = Number(state.lastCooldownActivityByTask[String(task.id || '')] || 0)
       if ((now - lastNotifiedAt) < cooldownActivityThrottleMs) continue
 
-      console.log(`[kosmos] Loop guard paused task after repeated requeues (${Number(task.requeue_count || 0)}): ${task.title}`)
+      log.warn(`Loop guard paused task after repeated requeues (${Number(task.requeue_count || 0)}): ${task.title}`)
       state.lastCooldownActivityByTask[String(task.id || '')] = now
     }
 
@@ -180,11 +183,11 @@ async function kosmosCycle(mcp: MCPClient, state: KosmosProfileState) {
 
     if (!selectedTask) continue
     if (!selectedTask.workspace_path) {
-      console.log(`[kosmos] Task ${selectedTask.title} has no workspace_path, skipping`)
+      log.warn(`Task ${selectedTask.title} has no workspace_path, skipping`)
       continue
     }
 
-    console.log(`[kosmos] Processing task: ${selectedTask.title}`)
+    log.info(`Processing task: ${selectedTask.title}`)
     const taskId = String(selectedTask.id || '')
     const workspacePath = String(selectedTask.workspace_path || '')
 
@@ -196,18 +199,18 @@ async function kosmosCycle(mcp: MCPClient, state: KosmosProfileState) {
       const latestTask = asRecord(await mcp.getTask(taskId))
       const latestStatus = String(latestTask.status || '').toLowerCase()
       if (latestStatus !== 'todo') {
-        console.log(`[kosmos] Task no longer TODO (${latestStatus}): ${selectedTask.title}`)
+        log.info(`Task no longer TODO (${latestStatus}): ${selectedTask.title}`)
         continue
       }
 
       await mcp.moveTask(taskId, 'progress', 'vicks', `Delegated to Vicks on branch ${branchName}`)
-      console.log(`[kosmos] Delegated task to Vicks: ${selectedTask.title}`)
+      log.success(`Delegated task to Vicks: ${selectedTask.title}`)
 
       const spawnResult = asRecord(await mcp.spawnAgent('vicks'))
-      console.log(`[kosmos] Spawned Vicks: ${JSON.stringify(spawnResult)}`)
+      log.info(`Spawned Vicks: ${JSON.stringify(spawnResult)}`)
       state.activeTaskId = taskId
     } catch (error: unknown) {
-      console.error(`[kosmos] Error processing task ${taskId}:`, error)
+      log.error(`Error processing task ${taskId}: ${error}`)
       if (typeof error === 'object' && error && 'message' in error) {
         await mcp.addComment(taskId, `Kosmos ERROR: ${String((error as Error).message)}`, 'kosmos')
       }
@@ -269,7 +272,7 @@ async function recoverOrphanedInFlightTasks(
       const spawnResult = asRecord(await mcp.spawnAgent('wedge'))
       state.lastRecoveryAt = now
       if (!state.activeTaskId) state.activeTaskId = taskId
-      console.log(`[kosmos] Recovered orphaned QA task ${taskId}; spawned Wedge PID ${JSON.stringify(spawnResult)}`)
+      log.info(`Recovered orphaned QA task ${taskId}; spawned Wedge PID ${JSON.stringify(spawnResult)}`)
       return true
     }
   }
@@ -299,7 +302,7 @@ async function recoverOrphanedInFlightTasks(
       const spawnResult = asRecord(await mcp.spawnAgent('vicks'))
       state.lastRecoveryAt = now
       if (!state.activeTaskId) state.activeTaskId = taskId
-      console.log(`[kosmos] Recovered orphaned progress task ${taskId}; spawned Vicks PID ${JSON.stringify(spawnResult)}`)
+      log.info(`Recovered orphaned progress task ${taskId}; spawned Vicks PID ${JSON.stringify(spawnResult)}`)
       return true
     }
   }
@@ -324,7 +327,7 @@ async function monitorActiveTask(
 
   const status = String(task.status || '')
   if (status === 'done' || status === 'todo') {
-    console.log(`[kosmos] Clearing active task ${task.id} (status: ${status})`)
+    log.info(`Clearing active task ${task.id} (status: ${status})`)
     state.activeTaskId = null
     return
   }
@@ -345,7 +348,7 @@ async function monitorActiveTask(
     const hasVicks = activeAgentsList.some((a) => String(a.profile_id || '').toLowerCase() === 'vicks')
     if (!hasVicks) {
       const spawnResult = asRecord(await mcp.spawnAgent('vicks'))
-      console.log(`[kosmos] Respawned Vicks for stale progress task: ${JSON.stringify(spawnResult)}`)
+      log.info(`Respawned Vicks for stale progress task: ${JSON.stringify(spawnResult)}`)
     }
   }
 
@@ -360,7 +363,7 @@ async function monitorActiveTask(
     const hasWedge = activeAgentsList.some((a) => String(a.profile_id || '').toLowerCase() === 'wedge')
     if (!hasWedge) {
       const spawnResult = asRecord(await mcp.spawnAgent('wedge'))
-      console.log(`[kosmos] Respawned Wedge for stale QA task: ${JSON.stringify(spawnResult)}`)
+      log.info(`Respawned Wedge for stale QA task: ${JSON.stringify(spawnResult)}`)
     }
   }
 }

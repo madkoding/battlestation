@@ -1,9 +1,14 @@
-import test from 'node:test'
+import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { execSync } from 'child_process'
 import { runMigrations } from '../db/migrate'
+import { setupTestDb, cleanupTestDb } from '../test-utils/db'
+
+let dbDir: string
+before(() => { dbDir = setupTestDb() })
+after(() => { cleanupTestDb(dbDir) })
 import {
   createProject,
   createTask,

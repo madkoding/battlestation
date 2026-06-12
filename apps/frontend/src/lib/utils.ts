@@ -15,6 +15,16 @@ export function formatDate(date: string | Date): string {
   }).format(d)
 }
 
+export function isValidUrl(url: string): boolean {
+  if (!url) return true
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function formatRelativeTime(date: string | Date): string {
   const now = new Date()
   const d = new Date(date)

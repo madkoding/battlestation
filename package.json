@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w apps/backend",
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
     "dev:frontend": "npm run dev -w apps/frontend",
     "dev:agent": "npm run dev -w apps/agent",
     "build": "npm run build -w packages/shared && npm run build -w apps/backend && npm run build -w apps/agent && npm run build -w apps/frontend",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "concurrently": "^10.0.3",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "typescript-eslint": "^8.0.0"

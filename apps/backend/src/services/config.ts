@@ -34,42 +34,13 @@ const DEFAULT_CONFIG: Config = {
   mode: 'local',
   database: { url: '~/.kosmos/kosmos.db' },
   llm: {
-    providers: {
-      ollama: {
-        model: 'minimax-m2.7',
-        base_url: 'http://127.0.0.1:11434/v1',
-        api_key: '',
-        verify_tls: true,
-        profile: 'cloud',
-      },
-      openai: {
-        model: 'gpt-4o-mini',
-        base_url: 'https://api.openai.com/v1',
-        api_key: '',
-        verify_tls: true,
-        profile: 'cloud',
-      },
-      github_copilot: {
-        model: 'gpt-4o-mini',
-        base_url: 'https://api.githubcopilot.com',
-        api_key: '',
-        verify_tls: true,
-        profile: 'cloud',
-      },
-      anthropic: {
-        model: 'claude-3-5-sonnet-latest',
-        base_url: 'https://api.anthropic.com',
-        api_key: '',
-        verify_tls: true,
-        profile: 'cloud',
-      },
-    },
-    default_provider: 'ollama',
+    providers: {},
+    default_provider: '',
   },
   agents: {
-    kosmos: { provider: 'ollama', model: 'minimax-m2.7', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
-    vicks: { provider: 'ollama', model: 'minimax-m2.7', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
-    wedge: { provider: 'ollama', model: 'minimax-m2.7', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
+    kosmos: { provider: '', model: '', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
+    vicks: { provider: '', model: '', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
+    wedge: { provider: '', model: '', temperature: 0.2, top_p: 0.9, max_tokens: 16384 },
   },
   server: { port: 18792, cors_origins: ['*'] },
 }

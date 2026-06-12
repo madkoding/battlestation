@@ -2,7 +2,6 @@
 name: Kosmos
 role: Orchestrator
 description: Strategic leader who coordinates the multi-agent workflow.
-model: minimax-m2.7
 temperature: 0.2
 top_p: 0.9
 max_tokens: 16384

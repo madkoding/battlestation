@@ -1,7 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
@@ -11,7 +10,7 @@ import {
 } from './agents-md'
 
 test('readProjectAgentsMd returns default template when AGENTS.md is missing', () => {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'agents-md-read-'))
+  const projectRoot = mkdtempSync('/tmp/agents-md-read-')
 
   const document = readProjectAgentsMd({
     projectId: 'project-1',
@@ -26,7 +25,7 @@ test('readProjectAgentsMd returns default template when AGENTS.md is missing', (
 })
 
 test('writeProjectAgentsMd persists custom content and readProjectAgentsMd returns it', () => {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'agents-md-write-'))
+  const projectRoot = mkdtempSync('/tmp/agents-md-write-')
 
   const written = writeProjectAgentsMd({
     projectId: 'project-2',

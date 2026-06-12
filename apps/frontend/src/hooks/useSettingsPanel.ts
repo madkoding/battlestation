@@ -25,20 +25,20 @@ export const PROVIDERS: ProviderCapability[] = [
 ]
 
 export const defaultProviderSettings: ProviderSettings = {
-  provider: 'ollama',
+  provider: '' as ProviderSettings['provider'],
   profile: 'cloud',
-  model: 'minimax-m2.7',
-  base_url: 'https://ollama.com/v1',
+  model: '',
+  base_url: '',
   api_key: '',
   verify_tls: true,
 }
 
 export const providerDefaults: Record<ProviderSettings['provider'], { model: string; base_url: string; verify_tls: boolean; profile: ProviderSettings['profile'] }> = {
-  ollama: { model: 'minimax-m2.7', base_url: 'https://ollama.com/v1', verify_tls: true, profile: 'cloud' },
-  openai: { model: 'gpt-4o-mini', base_url: 'https://api.openai.com/v1', verify_tls: true, profile: 'cloud' },
-  github_copilot: { model: 'gpt-4o-mini', base_url: 'https://api.githubcopilot.com', verify_tls: true, profile: 'cloud' },
-  anthropic: { model: 'claude-3-5-sonnet-latest', base_url: 'https://api.anthropic.com', verify_tls: true, profile: 'cloud' },
-  google: { model: 'gemini-1.5-flash', base_url: 'https://generativelanguage.googleapis.com', verify_tls: true, profile: 'cloud' },
+  ollama: { model: '', base_url: 'https://ollama.com/v1', verify_tls: true, profile: 'cloud' },
+  openai: { model: '', base_url: 'https://api.openai.com/v1', verify_tls: true, profile: 'cloud' },
+  github_copilot: { model: '', base_url: 'https://api.githubcopilot.com', verify_tls: true, profile: 'cloud' },
+  anthropic: { model: '', base_url: 'https://api.anthropic.com', verify_tls: true, profile: 'cloud' },
+  google: { model: '', base_url: 'https://generativelanguage.googleapis.com', verify_tls: true, profile: 'cloud' },
 }
 
 export function getDefaultProviderSettings(provider: ProviderSettings['provider']): ProviderSettings {
@@ -93,7 +93,7 @@ export function useSettingsPanel() {
           settingsApi.getAll(),
         ])
         if (isMounted) {
-          setProviderSettings(response)
+          setProviderSettings(response?.provider ? response : defaultProviderSettings)
           setProviderCapabilities(capabilities.providers)
           const configsRaw = allSettings.model_provider_configs
           const nextMap: Partial<Record<ProviderSettings['provider'], ProviderSettings>> = {}
@@ -113,12 +113,16 @@ export function useSettingsPanel() {
               }
             })
           }
-          nextMap[response.provider] = {
-            ...response,
-            api_key: String(response.api_key || ''),
+          if (response?.provider) {
+            nextMap[response.provider] = {
+              ...response,
+              api_key: String(response.api_key || ''),
+            }
           }
           setProviderConfigMap(nextMap)
-          await loadProviderModels(response.provider)
+          if (response?.provider) {
+            await loadProviderModels(response.provider)
+          }
           const health = await settingsApi.getProviderHealth()
           if (health?.providers) {
             const nextHealth: Partial<Record<ProviderSettings['provider'], ProviderHealth>> = {}
@@ -175,6 +179,7 @@ export function useSettingsPanel() {
   }
 
   const updateProvider = async (provider: ProviderSettings['provider']) => {
+    if (!provider) return
     const next = providerConfigMap[provider] || getDefaultProviderSettings(provider)
     setAvailableModels([])
     setProviderHealth((current) => ({

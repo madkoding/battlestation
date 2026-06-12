@@ -1,4 +1,5 @@
 import { getDb, saveDb, transaction } from '../db/sqlite-client'
+import { logger } from '../lib/logger'
 
 export async function runMigrations() {
   const db = await getDb()
@@ -132,5 +133,5 @@ export async function runMigrations() {
 
   })
   saveDb(db)
-  console.log('[db] Migrations complete')
+  logger.db('Migrations complete')
 }

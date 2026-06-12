@@ -3,6 +3,7 @@ import { Check, Copy, Info } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/uiStore'
+import { COPY_FEEDBACK_MS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 export function ConnectionStatusPopover({ onOpenActivity }: { onOpenActivity: () => void }) {
@@ -21,7 +22,7 @@ export function ConnectionStatusPopover({ onOpenActivity }: { onOpenActivity: ()
     try {
       await navigator.clipboard.writeText(wsTooltip)
       setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 1200)
+      setTimeout(() => setIsCopied(false), COPY_FEEDBACK_MS)
     } catch {
       setIsCopied(false)
     }

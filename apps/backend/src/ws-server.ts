@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { saveLiveActivityEvent } from './services/live-activity'
+import { logger } from './lib/logger'
 
 const clients = new Set<WebSocket>()
 
@@ -10,20 +11,20 @@ export function initWebSocketServer(port: number) {
 
   wss.on('connection', (ws) => {
     clients.add(ws)
-    console.log(`[ws] Client connected. Total: ${clients.size}`)
+    logger.ws(`Client connected (total: ${clients.size})`)
 
     ws.on('close', () => {
       clients.delete(ws)
-      console.log(`[ws] Client disconnected. Total: ${clients.size}`)
+      logger.ws(`Client disconnected (total: ${clients.size})`)
     })
 
     ws.on('error', (err) => {
-      console.error('[ws] Error:', err)
+      logger.error('WebSocket error', err)
       clients.delete(ws)
     })
   })
 
-  console.log(`[ws] WebSocket server on port ${port}`)
+  logger.ws(`Server on port ${port}`)
   return wss
 }
 

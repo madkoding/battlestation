@@ -7,8 +7,39 @@ import { runMigrations } from './db/migrate'
 import { initWebSocketServer, closeWebSocketServer } from './ws-server'
 import { getConfig } from './services/config'
 import { spawnAgent, killAllAgents, startHeartbeatWatchdog } from './services/agent-spawner'
+import { logger } from './lib/logger'
+
+const B = '\x1b[1m'
+const CYAN = '\x1b[36m'
+const GREEN = '\x1b[32m'
+const YELLOW = '\x1b[33m'
+const MAGENTA = '\x1b[35m'
+const GRAY = '\x1b[90m'
+const R = '\x1b[0m'
 
 const PORT = 18792
+
+function printBanner(httpPort: number, wsPort: number) {
+  const dashUrl = `http://localhost:18795`
+  const httpUrl = `http://localhost:${httpPort}`
+  const mcpUrl = `${httpUrl}/mcp`
+  const wsUrl = `ws://localhost:${wsPort}`
+
+  const rule = `  ${CYAN}────────────────────────────────────────────${R}`
+  console.log()
+  console.log(rule)
+  console.log(`  ${CYAN}${B}   ⚡  B A T T L E S T A T I O N  ${R}`)
+  console.log(`  ${CYAN}   AI Agent Orchestration Platform${R}`)
+  console.log(rule)
+  console.log()
+  console.log(`  ${GREEN}${B}REST API${R}     ${GRAY}→${R}  ${GREEN}${httpUrl}${R}`)
+  console.log(`  ${YELLOW}${B}MCP${R}          ${GRAY}→${R}  ${YELLOW}${mcpUrl}${R}`)
+  console.log(`  ${MAGENTA}${B}WebSocket${R}    ${GRAY}→${R}  ${MAGENTA}${wsUrl}${R}`)
+  console.log(`  ${CYAN}${B}Dashboard${R}   ${GRAY}→${R}  ${CYAN}${dashUrl}${R}`)
+  console.log()
+  console.log(rule)
+  console.log()
+}
 
 async function main() {
   await runMigrations()
@@ -17,7 +48,7 @@ async function main() {
   const db = await getDb()
   db.run('DELETE FROM running_agents')
   saveDb(db)
-  console.log('[server] Cleared stale agent records')
+  logger.info('Cleared stale agent records')
 
   startHeartbeatWatchdog()
 
@@ -25,7 +56,10 @@ async function main() {
   const actualPort = config.server?.port || PORT
   const actualWsPort = actualPort + 1
 
-  const fastify = Fastify({ logger: true })
+  const fastify = Fastify({
+    logger: { level: 'warn' },
+    disableRequestLogging: true,
+  })
 
   await fastify.register(cors, {
     origin: config.server?.cors_origins || ['*'],
@@ -38,13 +72,15 @@ async function main() {
   initWebSocketServer(actualWsPort)
 
   spawnAgent('kosmos').then((result) => {
-    console.log(`[server] Kosmos agent spawned (PID: ${result.pid})`)
+    logger.success(`Kosmos agent spawned (PID: ${result.pid})`)
   }).catch((err) => {
-    console.error('[server] Failed to spawn Kosmos agent:', err)
+    logger.error('Failed to spawn Kosmos agent', err)
   })
 
   const shutdown = async () => {
-    console.log('[server] Shutting down...')
+    console.log()
+    logger.warn('Shutting down...')
+    console.log()
     await killAllAgents()
     closeWebSocketServer()
     await fastify.close()
@@ -55,10 +91,7 @@ async function main() {
 
   try {
     await fastify.listen({ port: actualPort, host: '0.0.0.0' })
-    console.log(`[server] REST API on http://localhost:${actualPort}`)
-    console.log(`[server] MCP on http://localhost:${actualPort}/mcp`)
-    console.log(`[server] WebSocket on ws://localhost:${actualWsPort}`)
-    console.log(`[server] Kosmos agent spawned as child process`)
+    printBanner(actualPort, actualWsPort)
   } catch (err: unknown) {
     fastify.log.error(err)
     process.exit(1)

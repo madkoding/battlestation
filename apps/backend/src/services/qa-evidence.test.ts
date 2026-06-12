@@ -1,13 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { runPlaywrightCapture } from './qa-evidence'
 
 test('runPlaywrightCapture returns non-persistent ad-hoc failure when no scripts and no urls', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'qa-evidence-adhoc-'))
+  const workspace = mkdtempSync('/tmp/qa-evidence-adhoc-')
   const result = await runPlaywrightCapture({
     workspacePath: workspace,
   })
@@ -18,7 +17,7 @@ test('runPlaywrightCapture returns non-persistent ad-hoc failure when no scripts
 })
 
 test('runPlaywrightCapture validates output_subdir path traversal', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'qa-evidence-safe-'))
+  const workspace = mkdtempSync('/tmp/qa-evidence-safe-')
   await assert.rejects(
     () => runPlaywrightCapture({
       workspacePath: workspace,

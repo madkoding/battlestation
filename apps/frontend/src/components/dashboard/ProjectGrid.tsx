@@ -1,10 +1,11 @@
-import { FolderOpen } from 'lucide-react'
+import { AlertCircle, FolderOpen } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/common/LoadingSpinner'
 import { useProjectStore } from '@/stores/projectStore'
 import { useUIStore } from '@/stores/uiStore'
 import { ProjectCard } from './ProjectCard'
 import type { Project } from '@/types/models'
+import { SKELETON_PLACEHOLDER_COUNT } from '@/lib/constants'
 
 interface ProjectGridProps {
   onRequestDelete: (project: Project) => void
@@ -17,7 +18,7 @@ export function ProjectGrid({
   onOpenSettings,
   deletingProjectId,
 }: ProjectGridProps) {
-  const { projects, isLoadingProjects } = useProjectStore()
+  const { projects, isLoadingProjects, projectsLoadError, loadProjects } = useProjectStore()
   const { dashboardQuery } = useUIStore()
 
   const filteredProjects = projects.filter(p =>
@@ -28,9 +29,19 @@ export function ProjectGrid({
   if (isLoadingProjects) {
     return (
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: SKELETON_PLACEHOLDER_COUNT }).map((_, i) => (
           <Card key={i} className="h-40 sm:h-44 tablet:h-48 animate-pulse bg-surface-default/50" />
         ))}
+      </div>
+    )
+  }
+
+  if (projectsLoadError) {
+    return (
+      <div className="flex items-center justify-center gap-2 p-4 rounded-lg border border-danger/40 bg-danger/10 text-sm text-danger">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        <span>{projectsLoadError}</span>
+        <button type="button" onClick={() => void loadProjects()} className="ml-auto underline">Retry</button>
       </div>
     )
   }

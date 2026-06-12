@@ -5,6 +5,7 @@ import { broadcast } from '../ws-server'
 import { gitInit, gitCreateWorktree, gitListWorktreeArtifacts } from './git'
 import { listQaEvidence } from './qa-evidence-store'
 import { getRuntimePolicy } from './policy'
+import { logger } from '../lib/logger'
 
 type TaskRecord = {
   id: string
@@ -78,8 +79,10 @@ function isValidTransition(from: TaskStatus, to: TaskStatus): boolean {
   return toIdx === fromIdx + 1
 }
 
-function now() {
-  return new Date().toISOString()
+let _lastMs = 0
+function now(): string {
+  _lastMs = Math.max(_lastMs + 1, Date.now())
+  return new Date(_lastMs).toISOString()
 }
 
 function rowToObject(columns: string[], row: unknown[]): TaskRecord {
@@ -361,7 +364,7 @@ export async function moveTask(id: string, toStatus: TaskStatus, agentName?: str
           }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : String(error || 'Unknown error')
-          console.error('[kanban] Git worktree error:', message)
+          logger.error(`Git worktree error: ${message}`)
         }
       }
     }

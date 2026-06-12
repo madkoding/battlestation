@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { TOAST_DEDUP_MS, TOAST_AUTO_REMOVE_MS, MAX_TOASTS } from '@/lib/constants'
 
 interface Toast {
   id: string
@@ -25,15 +26,15 @@ export const useToastStore = create<ToastState>()(
         const toast = { id, type, message, createdAt }
         
         set((state) => ({
-          toasts: state.toasts.some((t) => t.type === type && t.message === message && createdAt - t.createdAt < 2500)
+          toasts            : state.toasts.some((t) => t.type === type && t.message === message && createdAt - t.createdAt < TOAST_DEDUP_MS)
             ? state.toasts
-            : [...state.toasts.slice(-5), toast] // Keep max 6 toasts
+            : [...state.toasts.slice(-MAX_TOASTS), toast]
         }))
         
         // Auto-remove after 4.2 seconds
         setTimeout(() => {
           get().removeToast(id)
-        }, 4200)
+        }, TOAST_AUTO_REMOVE_MS)
       },
       
       removeToast: (id) => {

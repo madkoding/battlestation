@@ -1,8 +1,13 @@
 import { spawn, ChildProcess } from 'child_process'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { getDb, saveDb } from '../db/sqlite-client'
 import { getConfig } from './config'
 import { DEFAULT_PORT } from '@kosmos/shared'
+import { logger } from '../lib/logger'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const workspaceRoot = join(__dirname, '..', '..', '..', '..')
 
 const activeAgents = new Map<number, { profileId: string; child: ChildProcess; startedAt: string }>()
 
@@ -35,7 +40,6 @@ export async function spawnAgent(profileId: string): Promise<{ pid: number; prof
   const config = await getConfig()
   const port = Number(config.server?.port || DEFAULT_PORT)
 
-  const workspaceRoot = process.cwd()
   const agentEntryPath = join(workspaceRoot, 'apps', 'agent', 'src', 'index.ts')
 
   const child = spawn('tsx', [agentEntryPath, `--profile=${profileId}`, `--server-url=http://localhost:${port}`], {
@@ -57,7 +61,7 @@ export async function spawnAgent(profileId: string): Promise<{ pid: number; prof
   saveDb(db)
 
   child.on('error', (err) => {
-    console.error(`[agent:${profileId}] Process error:`, err.message)
+    logger.error(`Process error for ${profileId}`, err.message)
     activeAgents.delete(pid)
     cleanupAgent(pid)
   })
@@ -69,11 +73,13 @@ export async function spawnAgent(profileId: string): Promise<{ pid: number; prof
   })
 
   child.stdout?.on('data', (data) => {
-    console.log(`[agent:${profileId}] ${data.toString().trim()}`)
+    const line = data.toString().trim()
+    if (line) console.log(line)
   })
 
   child.stderr?.on('data', (data) => {
-    console.error(`[agent:${profileId}] ${data.toString().trim()}`)
+    const line = data.toString().trim()
+    if (line) console.error(line)
   })
 
   return { pid, profile_id: profileId, started_at }
@@ -117,7 +123,7 @@ export async function killAgent(pid: number, graceMs = 10000): Promise<boolean> 
   await cleanupAgent(pid)
 
   if (!exited) {
-    console.warn(`[spawner] Agent ${pid} had to be SIGKILL'd`)
+    logger.warn(`Agent ${pid} had to be SIGKILL'd`)
   }
 
   return true
@@ -154,7 +160,7 @@ export function startHeartbeatWatchdog(intervalMs = 15000): ReturnType<typeof se
   const watchdog = setInterval(async () => {
     for (const [pid, info] of activeAgents.entries()) {
       if (!isProcessActive(info.child)) {
-        console.warn(`[watchdog] Agent ${pid} (${info.profileId}) is dead, cleaning up`)
+        logger.warn(`Agent ${pid} (${info.profileId}) is dead, cleaning up`)
         activeAgents.delete(pid)
         await cleanupAgent(pid)
       }

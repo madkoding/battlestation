@@ -1,7 +1,11 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardView } from '@/components/dashboard/DashboardView'
-import { LandingPage } from '@/components/landing/LandingPage'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
+
+const LandingPage = lazy(() =>
+  import('@/components/landing/LandingPage').then((m) => ({ default: m.LandingPage })),
+)
 import { useProjectStore } from '@/stores/projectStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -56,22 +60,26 @@ function AppDashboard() {
   }, [addToast, loadProjects, loadCatalog, theme])
 
   return (
-    <AppShell>
-      <DashboardView />
+    <ErrorBoundary>
+      <AppShell>
+        <DashboardView />
 
-      <Suspense fallback={<ModalFallback />}>
-        <LiveActivityModal />
-        <TaskModal />
-        <KanbanModal />
-      </Suspense>
-    </AppShell>
+        <ErrorBoundary>
+          <Suspense fallback={<ModalFallback />}>
+            <LiveActivityModal />
+            <TaskModal />
+            <KanbanModal />
+          </Suspense>
+        </ErrorBoundary>
+      </AppShell>
+    </ErrorBoundary>
   )
 }
 
 // Main App Component
 function App() {
   const isPagesLanding = import.meta.env.PROD && window.location.hostname.endsWith('github.io')
-  return isPagesLanding ? <LandingPage /> : <AppDashboard />
+  return isPagesLanding ? <Suspense fallback={null}><LandingPage /></Suspense> : <AppDashboard />
 }
 
 export default App

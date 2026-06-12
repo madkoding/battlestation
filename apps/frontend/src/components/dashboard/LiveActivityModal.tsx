@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { AgentBadge } from '@/components/common/StatusBadge'
@@ -11,6 +11,7 @@ import { useToastStore } from '@/stores/toastStore'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { Activity } from '@/types/models'
+import { AGENT_ACTIVE_WINDOW_MS, AGENT_PULSE_INTERVAL_MS, MAX_ACTIVITY_DISPLAY_ITEMS, MAX_ACTIVITY_RENDER_ITEMS, MAX_AGENT_PULSE_ROWS, MAX_COUNTS_BY_TYPE } from '@/lib/constants'
 
 function ActivityItem({ activity }: { activity: Activity }) {
   const activityType = (activity.type || '').toLowerCase()
@@ -54,13 +55,13 @@ function ActivityItem({ activity }: { activity: Activity }) {
 
 function AgentPulse({ activities }: { activities: Activity[] }) {
   const [now, setNow] = useState(() => Date.now())
-  const activeWindowMs = 90000
+  const activeWindowMs = AGENT_ACTIVE_WINDOW_MS
   const latestByAgent = new Map<string, Activity>()
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNow(Date.now())
-    }, 10000)
+    }, AGENT_PULSE_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -71,7 +72,7 @@ function AgentPulse({ activities }: { activities: Activity[] }) {
     }
   }
 
-  const rows = Array.from(latestByAgent.entries()).slice(0, 8)
+  const rows = Array.from(latestByAgent.entries()).slice(0, MAX_AGENT_PULSE_ROWS)
 
   return (
     <div className="px-3 py-2 sm:px-4 border-b border-border-default bg-surface-default/30">
@@ -139,13 +140,16 @@ export function LiveActivityModal() {
       .then((data) => {
         setPersistedScoped(data)
       })
+      .catch((error: unknown) => {
+        addToast('error', error instanceof Error ? error.message : 'Failed to load activity')
+      })
       .finally(() => {
         setIsLoadingScoped(false)
       })
     return () => {
       window.clearTimeout(requestLoading)
     }
-  }, [isLiveActivityOpen, scope, selectedProjectId, activeTaskId])
+  }, [isLiveActivityOpen, scope, selectedProjectId, activeTaskId, addToast])
 
   const liveScoped = useMemo(() => {
     return activities.filter((entry) => {
@@ -176,7 +180,7 @@ export function LiveActivityModal() {
     for (const item of liveScoped) add(item)
     for (const item of persistedScoped) add(item)
 
-    return rows.slice(0, 20)
+    return rows.slice(0, MAX_ACTIVITY_DISPLAY_ITEMS)
   }, [liveScoped, persistedScoped])
 
   const sorted = [...merged].sort((a, b) => {
@@ -193,7 +197,7 @@ export function LiveActivityModal() {
     }
     return Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
+      .slice(0, MAX_COUNTS_BY_TYPE)
   }, [sorted])
 
   const handleCopyDiagnostics = async () => {
@@ -228,11 +232,12 @@ export function LiveActivityModal() {
 
   return (
     <Dialog open={isLiveActivityOpen} onOpenChange={setLiveActivityOpen}>
-      <DialogContent aria-describedby={undefined} className="max-w-[96vw] w-full sm:max-w-3xl h-[84vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[96vw] w-full sm:max-w-3xl h-[84vh] p-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-4 py-3 border-b border-border-default">
           <DialogTitle className="text-base sm:text-lg">
             Live Activity <span className="text-text-muted font-normal">({sorted.length})</span>
           </DialogTitle>
+          <DialogDescription className="sr-only">Real-time agent activity feed</DialogDescription>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -300,7 +305,7 @@ export function LiveActivityModal() {
               {sorted.length === 0 ? (
                 <div className="text-center py-8 text-text-muted text-sm">No activity yet</div>
               ) : (
-                sorted.slice(0, 100).map((activity) => (
+                sorted.slice(0, MAX_ACTIVITY_RENDER_ITEMS).map((activity) => (
                   <ActivityItem key={activity.id || `${activity.agent || 'Unknown'}-${activity.timestamp}`} activity={activity} />
                 ))
               )}

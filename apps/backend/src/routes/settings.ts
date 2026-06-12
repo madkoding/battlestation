@@ -97,41 +97,11 @@ async function ensureProviderHealthCacheLoaded(): Promise<void> {
 }
 
 const PROVIDER_DEFAULTS: Record<ProviderId, Omit<ProviderSettings, 'provider'>> = {
-  ollama: {
-    profile: 'cloud',
-    model: 'minimax-m2.7',
-    base_url: 'https://ollama.com/v1',
-    api_key: '',
-    verify_tls: true,
-  },
-  openai: {
-    profile: 'cloud',
-    model: 'gpt-4o-mini',
-    base_url: 'https://api.openai.com/v1',
-    api_key: '',
-    verify_tls: true,
-  },
-  github_copilot: {
-    profile: 'cloud',
-    model: 'gpt-4o-mini',
-    base_url: 'https://api.githubcopilot.com',
-    api_key: '',
-    verify_tls: true,
-  },
-  anthropic: {
-    profile: 'cloud',
-    model: 'claude-3-5-sonnet-latest',
-    base_url: 'https://api.anthropic.com',
-    api_key: '',
-    verify_tls: true,
-  },
-  google: {
-    profile: 'cloud',
-    model: 'gemini-1.5-flash',
-    base_url: 'https://generativelanguage.googleapis.com',
-    api_key: '',
-    verify_tls: true,
-  },
+  ollama: { profile: 'cloud', model: '', base_url: 'https://ollama.com/v1', api_key: '', verify_tls: true },
+  openai: { profile: 'cloud', model: '', base_url: 'https://api.openai.com/v1', api_key: '', verify_tls: true },
+  github_copilot: { profile: 'cloud', model: '', base_url: 'https://api.githubcopilot.com', api_key: '', verify_tls: true },
+  anthropic: { profile: 'cloud', model: '', base_url: 'https://api.anthropic.com', api_key: '', verify_tls: true },
+  google: { profile: 'cloud', model: '', base_url: 'https://generativelanguage.googleapis.com', api_key: '', verify_tls: true },
 }
 
 const SECRET_MASK = '********'
@@ -387,7 +357,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/settings', async () => {
     const config = await getConfig()
-    const provider = (config.llm?.default_provider || 'ollama') as ProviderId
+    const provider = config.llm?.default_provider || ''
 
     const modelProviderConfigs = Object.fromEntries(
       (Object.keys(PROVIDER_DEFAULTS) as ProviderId[]).map((id) => [id, getProviderSettingsFromConfig(id, config)]),
@@ -404,8 +374,11 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/settings/provider', async () => {
     const config = await getConfig()
-    const provider = (config.llm?.default_provider || 'ollama') as ProviderId
-    return getProviderSettingsFromConfig(provider, config)
+    const provider = config.llm?.default_provider || ''
+    if (!provider) {
+      return { provider: '', profile: 'cloud', model: '', base_url: '', api_key: '', verify_tls: true }
+    }
+    return getProviderSettingsFromConfig(provider as ProviderId, config)
   })
 
   fastify.get('/api/settings/provider/capabilities', async () => {
@@ -425,9 +398,12 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
   fastify.get('/api/settings/provider/models', async (request) => {
     const query = request.query as { provider?: ProviderId }
     const config = await getConfig()
-    const provider = (query.provider || config.llm?.default_provider || 'ollama') as ProviderId
-    const settings = getProviderSettingsFromConfig(provider, config)
-    const apiKey = resolveProviderApiKeyFromConfig(provider, config)
+    const provider = query.provider || config.llm?.default_provider || ''
+    if (!provider) {
+      return { provider: '', models: [], selected: '' }
+    }
+    const settings = getProviderSettingsFromConfig(provider as ProviderId, config)
+    const apiKey = resolveProviderApiKeyFromConfig(provider as ProviderId, config)
 
     try {
       const models = await fetchProviderModels(settings, apiKey)
@@ -452,9 +428,9 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     const current = await getConfig()
 
     if (key === 'model_provider') {
-      const provider = String(value || '').trim() as ProviderId
-      if (!PROVIDER_DEFAULTS[provider]) {
-        return { key, value: current.llm?.default_provider || 'ollama' }
+      const provider = String(value || '').trim()
+      if (provider && !PROVIDER_DEFAULTS[provider as ProviderId]) {
+        return { key, value: current.llm?.default_provider || '' }
       }
 
       const next = await updateConfig({
@@ -490,8 +466,11 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/settings/llm/source-of-truth', async () => {
     const config = await getConfig()
-    const provider = String(config.llm?.default_provider || 'ollama') as ProviderId
-    const settings = getProviderSettingsFromConfig(provider, config)
+    const provider = config.llm?.default_provider || ''
+    if (!provider) {
+      return { provider: '', model: '', base_url: '', source: 'none' }
+    }
+    const settings = getProviderSettingsFromConfig(provider as ProviderId, config)
     return {
       provider,
       model: settings.model,

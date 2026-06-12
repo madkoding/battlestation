@@ -11,9 +11,12 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { AlertCircle, ClipboardList } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/common/LoadingSpinner'
 import { useProjectStore } from '@/stores/projectStore'
 import { useToastStore } from '@/stores/toastStore'
-import { STATUSES, STATUS_META, type TaskStatus } from '@/lib/constants'
+import { STATUSES, STATUS_META, DRAG_ACTIVATION_DISTANCE_PX, type TaskStatus } from '@/lib/constants'
 import type { Task } from '@/types/models'
 import { TaskCard } from './TaskCard'
 import { KanbanColumn } from './KanbanColumn'
@@ -32,16 +35,23 @@ export function KanbanBoard() {
   const [newTaskDescription, setNewTaskDescription] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium')
   const [isCreatingTask, setIsCreatingTask] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const currentProjectTasks = selectedProjectId ? projectTasks[selectedProjectId] : undefined
   const isInitialLoading = isLoadingTasks && !currentProjectTasks
 
   useEffect(() => {
-    if (!selectedProjectId || currentProjectTasks) {
-      return
-    }
-
+    if (!selectedProjectId) return
+    if (currentProjectTasks) return
+    setLoadError(null)
     void loadProjectTasks(selectedProjectId)
   }, [selectedProjectId, currentProjectTasks, loadProjectTasks])
+
+  useEffect(() => {
+    if (!selectedProjectId) return
+    if (isLoadingTasks) return
+    if (currentProjectTasks) return
+    setLoadError('Failed to load tasks')
+  }, [selectedProjectId, isLoadingTasks, currentProjectTasks])
 
   // Group tasks by status
   const tasksByStatus = STATUSES.reduce((acc, status) => {
@@ -57,7 +67,7 @@ export function KanbanBoard() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: DRAG_ACTIVATION_DISTANCE_PX,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -174,14 +184,8 @@ export function KanbanBoard() {
     }
   }
 
-  return (
-    <div className="h-full flex flex-col">
-      {isInitialLoading ? (
-        <div className="px-3 py-2 text-xs text-text-muted border-b border-border-default bg-surface-default/30">
-          Loading tasks...
-        </div>
-      ) : null}
-
+  const renderBoard = () => (
+    <>
       <MobileNav
         currentColumnIndex={currentColumnIndex}
         goToColumn={goToColumn}
@@ -189,14 +193,12 @@ export function KanbanBoard() {
         tasksByStatus={tasksByStatus}
       />
 
-      {/* Board - Responsive Layout */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Mobile: Single-column swipe view optimized for 9.7" tablets */}
         <div
           ref={mobileScrollRef}
           onScroll={handleMobileScroll}
@@ -216,7 +218,6 @@ export function KanbanBoard() {
           </div>
         </div>
 
-        {/* Tablet: 2x2 grid for easier visibility */}
         <div className="hidden md:block xl:hidden flex-1 min-h-0 overflow-y-auto">
           <div className="grid grid-cols-2 auto-rows-[minmax(0,1fr)] gap-3 h-full min-h-[38rem] p-3">
             {STATUSES.map((status) => (
@@ -231,7 +232,6 @@ export function KanbanBoard() {
           </div>
         </div>
 
-        {/* Desktop: 4 columns */}
         <div className="hidden xl:flex flex-1 overflow-x-auto overflow-y-hidden">
           <div className="flex gap-3 h-full w-full min-w-0 p-3">
             {STATUSES.map((status) => (
@@ -264,6 +264,90 @@ export function KanbanBoard() {
         handleCreateTaskSubmit={handleCreateTaskSubmit}
         resetCreateTaskForm={resetCreateTaskForm}
       />
+    </>
+  )
+
+  if (isInitialLoading) {
+    return (
+      <div className="h-full flex flex-col p-3 space-y-3">
+        <div className="hidden xl:flex gap-3 h-full">
+          {STATUSES.map((status) => (
+            <div key={status} className="flex-1 space-y-3">
+              <Skeleton className="h-5 w-24" />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block xl:hidden">
+          <div className="grid grid-cols-2 gap-3">
+            {STATUSES.map((status) => (
+              <div key={status} className="space-y-3">
+                <Skeleton className="h-5 w-24" />
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="md:hidden space-y-3">
+          <Skeleton className="h-5 w-24" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-center gap-2 p-4 m-3 rounded-lg border border-danger/40 bg-danger/10 text-sm text-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (!selectedProjectId) return
+              setLoadError(null)
+              void loadProjectTasks(selectedProjectId)
+            }}
+            className="ml-auto underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (currentProjectTasks && currentProjectTasks.length === 0) {
+    return (
+      <div className="h-full flex flex-col">
+        <EmptyState
+          icon={<ClipboardList className="h-12 w-12" />}
+          title="No tasks yet"
+          description="Create your first task to get started"
+          action={
+            <button
+              type="button"
+              onClick={handleCreateTodoTask}
+              className="px-4 py-2 rounded-lg bg-accent-primary text-text-inverse text-sm hover:bg-accent-primary/90"
+            >
+              Create Task
+            </button>
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {renderBoard()}
     </div>
   )
 }

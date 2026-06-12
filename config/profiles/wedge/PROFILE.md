@@ -2,7 +2,6 @@
 name: Wedge
 role: QA Engineer
 description: Meticulous QA engineer who ensures quality without blocking progress.
-model: deepseek-r1:1.5b
 temperature: 0.2
 top_p: 0.9
 max_tokens: 16384
